@@ -225,8 +225,10 @@ else:
     
 
     # Exibe a tabela de romaneios detalhados ocupando a tela cheia
+# Captura o horário atual da atualização
+hora_atual = datetime.now().strftime("%H:%M:%S")
 
-    st.markdown(f"### Entrada de Cana {data_selecionada.strftime('%d/%m/%Y')}")
+st.markdown(f"### Entrada de Cana {data_selecionada.strftime('%d/%m/%Y')} - Última Atualização às {hora_atual}")
 
     st.dataframe(df_visualizacao.style.format({
 
