@@ -40,7 +40,6 @@ st.markdown(f"#### Entrada de Cana: {data_selecionada.strftime('%d/%m/%Y')}")
 def buscar_dados_cana(data_filtro):
     data_str = data_filtro.strftime("%Y-%m-%d")
     try:
-        # Adicionado 'tc_estimado' na busca cirúrgica do dia
         resposta = supabase.table("APP COLHEITA").select("frente, nome_fazenda, gleba, atr, mineral_pct, vegetal_pct, tc_real, tc_estimado").eq("data_saida", data_str).execute()
         if resposta and hasattr(resposta, "data"):
             return resposta.data
@@ -53,10 +52,9 @@ def buscar_dados_cana(data_filtro):
 @st.cache_data(ttl=1800)
 def buscar_historico_e_estimado_glebas(lista_glebas):
     if not lista_glebas:
-        return pd.DataFrame(columns=['gleba', 'TC Total Gleba (Histórico)', 'TC Estimado'])
+        return pd.DataFrame(columns=['gleba', 'TC Total Gleba (Histórico)', 'TC Estimado Fixo'])
     try:
         lista_glebas_int = [int(g) for g in lista_glebas if pd.notna(g)]
-        # Buscando gleba, tc_real (para o histórico acumulado) e tc_estimado direto da tabela
         resposta = supabase.table("APP COLHEITA").select("gleba, tc_real, tc_estimado").in_("gleba", lista_glebas_int).execute()
         
         if resposta and hasattr(resposta, "data") and resposta.data:
@@ -65,23 +63,22 @@ def buscar_historico_e_estimado_glebas(lista_glebas):
             df_hist['tc_real'] = pd.to_numeric(df_hist['tc_real'], errors='coerce').fillna(0.0)
             df_hist['tc_estimado'] = pd.to_numeric(df_hist['tc_estimado'], errors='coerce').fillna(0.0)
             
-            # Para o Histórico: Agrupamos e somamos tudo normalmente
+            # Histórico: Soma de todas as linhas daquela gleba no banco
             df_soma_historico = df_hist.groupby('gleba')['tc_real'].sum().reset_index()
             df_soma_historico.columns = ['gleba', 'TC Total Gleba (Histórico)']
             
-            # Para o Estimado: Como ele é fixo por gleba e não deve multiplicar se aparecer várias vezes,
-            # pegamos o primeiro valor válido ou a média encontrada para aquela respectiva gleba
-            df_fixo_estimado = df_hist.groupby('gleba')['tc_estimado'].first().reset_index()
-            df_fixo_estimado.columns = ['gleba', 'TC Estimado']
+            # Estimado Fixo: Evita duplicar ou multiplicar se a gleba aparecer mais de uma vez
+            df_fixo_estimado = df_hist.groupby('gleba')['tc_estimado'].max().reset_index()
+            df_fixo_estimado.columns = ['gleba', 'TC Estimado Fixo']
             
-            # Junta os dois parâmetros por gleba de forma limpa
+            # Junta os indicadores consolidados da gleba
             df_consolidado_gleba = pd.merge(df_soma_historico, df_fixo_estimado, on='gleba', how='left')
             return df_consolidado_gleba
             
-        return pd.DataFrame(columns=['gleba', 'TC Total Gleba (Histórico)', 'TC Estimado'])
+        return pd.DataFrame(columns=['gleba', 'TC Total Gleba (Histórico)', 'TC Estimado Fixo'])
     except Exception as erro:
         st.error(f"Erro ao calcular parâmetros das glebas: {erro}")
-        return pd.DataFrame(columns=['gleba', 'TC Total Gleba (Histórico)', 'TC Estimado'])
+        return pd.DataFrame(columns=['gleba', 'TC Total Gleba (Histórico)', 'TC Estimado Fixo'])
 
 with st.spinner("Carregando dados da colheita..."):
     dados_banco = buscar_dados_cana(data_selecionada)
@@ -95,44 +92,44 @@ else:
     colunas_num = ['tc_real', 'atr', 'mineral_pct', 'vegetal_pct', 'tc_estimado']
     df_dia[colunas_num] = df_dia[colunas_num].apply(pd.to_numeric, errors='coerce').fillna(0.0)
 
-    # Coleta a lista de glebas do dia para buscar os dados consolidados do banco
+    # Coleta a lista de glebas únicas do dia atual
     glebas_do_dia = df_dia['gleba'].dropna().unique().tolist()
     df_parametros_glebas = buscar_historico_e_estimado_glebas(glebas_do_dia)
 
-    # Filtro de Frentes na barra lateral
+    # Filtro dinâmico de frentes na barra lateral
     lista_frentes = sorted(df_dia['frente'].unique().tolist())
     frentes_selecionadas = st.sidebar.multiselect("Selecione as Frentes:", options=lista_frentes, default=lista_frentes)
     
     df_filtrado = df_dia if not frentes_selecionadas else df_dia[df_dia['frente'].isin(frentes_selecionadas)]
 
-    # Realiza o cruzamento exato com o histórico e o estimado fixado por gleba
+    # Realiza o cruzamento exato trazendo o Histórico e o Estimado único da Gleba
     if not df_parametros_glebas.empty:
-        # Removemos o tc_estimado duplicado do romaneio diário antes do merge para herdar o valor fixo e controlado por gleba
-        if 'tc_estimado' in df_filtrado.columns:
-            df_filtrado = df_filtrado.drop(columns=['tc_estimado'])
-        df_visualizacao = pd.merge(df_filtrado, df_parametros_glebas, on='gleba', how='left')
+        # Removemos a coluna bruta temporária antes do merge para herdar o valor tratado e fixado por gleba
+        df_filtrado_base = df_filtrado.drop(columns=['tc_estimado'], errors='ignore')
+        df_visualizacao = pd.merge(df_filtrado_base, df_parametros_glebas, on='gleba', how='left')
     else:
         df_visualizacao = df_filtrado.copy()
         df_visualizacao['TC Total Gleba (Histórico)'] = 0.0
-        df_visualizacao['TC Estimado'] = 0.0
+        df_visualizacao['TC Estimado Fixo'] = 0.0
         
     df_visualizacao['TC Total Gleba (Histórico)'] = df_visualizacao['TC Total Gleba (Histórico)'].fillna(0.0)
-    df_visualizacao['TC Estimado'] = df_visualizacao['TC Estimado'].fillna(0.0)
+    df_visualizacao['TC Estimado Fixo'] = df_visualizacao['TC Estimado Fixo'].fillna(0.0)
     
-    # Renomeia as colunas de exibição conforme solicitado
+    # Renomeia os cabeçalhos para o padrão do relatório visual
     df_visualizacao = df_visualizacao.rename(columns={
         'frente': 'Frente', 'nome_fazenda': 'Fazenda', 'gleba': 'Gleba',
-        'tc_real': 'TC Real (Dia)', 'atr': 'ATR', 'mineral_pct': 'Imp. Mineral', 'vegetal_pct': 'Imp. Vegetal'
+        'TC Estimado Fixo': 'TC Estimado', 'tc_real': 'TC Real (Dia)', 
+        'atr': 'ATR', 'mineral_pct': 'Imp. Mineral', 'vegetal_pct': 'Imp. Vegetal'
     })
     
-    # Ordem exata com 'TC Estimado' posicionado logo antes de 'TC Real (Dia)'
+    # Ordem de colunas idêntica à imagem solicitada
     ordem_colunas = ['Frente', 'Fazenda', 'Gleba', 'TC Estimado', 'TC Real (Dia)', 'TC Total Gleba (Histórico)', 'ATR', 'Imp. Mineral', 'Imp. Vegetal']
     df_visualizacao = df_visualizacao[ordem_colunas].sort_values(by=['Frente', 'Fazenda', 'Gleba'])
     
-    # Formata o ID da gleba para exibir limpo
+    # Formata o código da gleba como string inteira limpa
     df_visualizacao['Gleba'] = df_visualizacao['Gleba'].fillna(0).astype(int).astype(str)
     
-    # Exibe a tabela de romaneios detalhados ocupando a tela cheia
+    # Renderiza a tabela limpa ocupando o container completo da página
     st.dataframe(df_visualizacao.style.format({
         'TC Estimado': '{:,.2f}',
         'TC Real (Dia)': '{:,.2f}',
