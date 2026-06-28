@@ -38,17 +38,14 @@ def buscar_dados_cana(data_filtro):
     data_str = data_filtro.strftime("%Y-%m-%d")
     
     try:
-        # Faz a requisição ao Supabase buscando apenas as colunas necessárias
-        resposta = supabase.table("APP COLHEITA") \
-            .select("frente, nome_fazenda, gleba, atr, mineral_pct, vegetal_pct, tc_real") \
-            .eq("data_saida", data_str) \
-            .execute()
+        # Nome corrigido para APP_COLHEITA conforme a imagem do banco e query linearizada
+        resposta = supabase.table("APP_COLHEITA").select("frente, nome_fazenda, gleba, atr, mineral_pct, vegetal_pct, tc_real").eq("data_saida", data_str).execute()
         
-        # Retorna os dados se tudo der certo
-        return respuesta.data
+        if resposta and hasattr(resposta, 'data'):
+            return respuesta.data
+        return []
         
     except Exception as erro:
-        # Captura erros de banco com segurança sem derrubar o app
         st.error(f"Erro na consulta do Supabase: {erro}")
         return []
 
@@ -85,7 +82,7 @@ else:
     
     st.markdown("---")
     
-    # --- DIVISÃO EM ABAS (Isso poupa processamento do navegador!) ---
+    # --- DIVISÃO EM ABAS ---
     aba_grafico, aba_tabela, aba_detalhe = st.tabs([
         "📈 Gráfico por Frente", 
         "🧮 Consolidado por Frente", 
@@ -115,7 +112,6 @@ else:
         }), use_container_width=True, hide_index=True)
 
     with aba_detalhe:
-        # Mostra a tabela bruta ordenada pela frente, facilitando a leitura
         df_visualizacao = df_filtrado[['frente', 'nome_fazenda', 'gleba', 'tc_real', 'atr', 'mineral_pct', 'vegetal_pct']].sort_values(by='frente')
         df_visualizacao.columns = ['Frente', 'Fazenda', 'Gleba', 'TC Real', 'ATR', 'Imp. Mineral', 'Imp. Vegetal']
         st.dataframe(df_visualizacao, use_container_width=True, hide_index=True)
