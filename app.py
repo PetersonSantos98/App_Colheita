@@ -224,20 +224,60 @@ else:
 
     
 
-    # Exibe a tabela de romaneios detalhados ocupando a tela cheia
+# ==============================
+# VISUAL BI - SOMENTE APRESENTAÇÃO
+# ==============================
 
-    st.markdown(f"### Entrada de Cana {data_selecionada.strftime('%d/%m/%Y')}")
+col1, col2, col3, col4 = st.columns(4)
 
-    st.dataframe(df_visualizacao.style.format({
+
+col1.metric(
+    "🚜 TC Real Hoje",
+    f"{df_visualizacao['TC Real (Dia)'].sum():,.2f}"
+)
+
+
+col2.metric(
+    "🌱 TC Histórico",
+    f"{df_visualizacao['TC Total Gleba (Histórico)'].sum():,.2f}"
+)
+
+
+col3.metric(
+    "🧪 ATR Médio",
+    f"{df_visualizacao['ATR'].mean():.2f}"
+)
+
+
+col4.metric(
+    "📍 Glebas",
+    df_visualizacao['Gleba'].nunique()
+)
+
+
+st.divider()
+
+
+st.markdown(
+    f"### 📋 Entrada de Cana {data_selecionada.strftime('%d/%m/%Y')}"
+)
+
+
+st.dataframe(
+
+    df_visualizacao.style.format({
 
         'TC Real (Dia)': '{:,.2f}',
-
         'TC Total Gleba (Histórico)': '{:,.2f}',
-
         'ATR': '{:.2f}',
-
         'Imp. Mineral': '{:.2f}',
-
         'Imp. Vegetal': '{:.2f}'
 
-    }), use_container_width=True, hide_index=True)
+    }),
+
+    use_container_width=True,
+
+    hide_index=True,
+
+    height=700
+)
