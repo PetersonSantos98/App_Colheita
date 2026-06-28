@@ -224,21 +224,19 @@ else:
 
     
 
-    # Exibe a tabela de romaneios detalhados ocupando a tela cheia
-# Captura o horário atual da atualização
-hora_atual = datetime.now().strftime("%H:%M:%S")
-
-st.markdown(f"### Entrada de Cana {data_selecionada.strftime('%d/%m/%Y')} - Última Atualização às {hora_atual}")
-
-    st.dataframe(df_visualizacao.style.format({
-
-        'TC Real (Dia)': '{:,.2f}',
-
-        'TC Total Gleba (Histórico)': '{:,.2f}',
-
-        'ATR': '{:.2f}',
-
-        'Imp. Mineral': '{:.2f}',
-
-        'Imp. Vegetal': '{:.2f}'
-    }), use_container_width=True, hide_index=True, height=700)
+st.dataframe(
+    df_visualizacao.style
+        .format({
+            'TC Real (Dia)': '{:,.2f}',
+            'TC Total Gleba (Histórico)': '{:,.2f}',
+            'ATR': '{:.2f}',
+            'Imp. Mineral': '{:.2f}',
+            'Imp. Vegetal': '{:.2f}'
+        })
+        .set_properties(**{
+            'font-size': '14px'
+        }),
+    use_container_width=True,
+    hide_index=True,
+    height=700
+)
