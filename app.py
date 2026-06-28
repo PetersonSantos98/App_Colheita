@@ -43,18 +43,11 @@ refresh()
 
 
 
-# 2. Conexão com Supabase
+# 2. Conexão com o Supabase
 
-SUPABASE_URL = st.secrets.get(
-    "SUPABASE_URL",
-    "https://wavgbddjlwcqshohwuwn.supabase.co"
-)
+SUPABASE_URL = st.secrets.get("SUPABASE_URL", "https://wavgbddjlwcqshohwuwn.supabase.co")
 
-
-SUPABASE_KEY = st.secrets.get(
-    "SUPABASE_KEY",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3YXZnYmRkamx3Y3FzaG9od3V3biIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzgyNDgyNTM5LCJleHAiOjIwOTgwNTg1Mzl9.LPkP2vw0P_CCT5ZIDrzgdlnCt8aOdEXVxLCY_7QqBw"
-)
+SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhdmdiZGRqbHdjcXNob2h3dXduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODI1MzksImV4cCI6MjA5ODA1ODUzOX0.LPkP2vw0P_CCT5ZIDrzgdlnLCt8aOdEXVxLCY_7QqBw")
 
 
 
