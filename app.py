@@ -3,7 +3,15 @@ import pandas as pd
 from datetime import date, datetime
 from supabase import create_client, Client
 
+SUPABASE_URL = st.secrets.get(
+    "SUPABASE_URL",
+    "https://wavgbddjlwcqshohwuwn.supabase.co"
+)
 
+SUPABASE_KEY = st.secrets.get(
+    "SUPABASE_KEY",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3YXZnYmRkamx3Y3Nob2h3dXduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODI1MzksImV4cCI6MjA5ODA1ODUzOX0.LPkP2vw0P_CCT5ZIDrzgdlnCt8aOdEXVxLCY_7QqBw"
+)
 # 1. Configuração da página do Streamlit
 
 st.set_page_config(
