@@ -36,13 +36,20 @@ data_selecionada = st.sidebar.date_input("Selecione a data:", date.today())
 def buscar_dados_cana(data_filtro):
     data_str = data_filtro.strftime("%Y-%m-%d")
     
-    # Selecionando APENAS o estritamente necessário para o relatório
-    resposta = supabase.table("APP COLHEITA") \
-        .select("frente, nome_fazenda, gleba, atr, mineral_pct, vegetal_pct, tc_real") \
-        .eq("data_saida", data_str) \
-        .execute()
-    
-    return respuesta.data
+    try:
+        # Faz a requisição ao Supabase
+        resposta = supabase.table("APP COLHEITA") \
+            .select("frente, nome_fazenda, gleba, atr, mineral_pct, vegetal_pct, tc_real") \
+            .eq("data_saida", data_str) \
+            .execute()
+        
+        # Retorna os dados se tudo der certo
+        return respuesta.data
+        
+    except Exception as erro:
+        # Se der erro no Supabase (ex: coluna errada ou tabela inexistente), mostra na tela
+        st.error(f"Erro na consulta do Supabase: {erro}")
+        return []
 
 with st.spinner("Carregando dados da colheita..."):
     dados_banco = buscar_dados_cana(data_selecionada)
