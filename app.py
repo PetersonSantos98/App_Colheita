@@ -5,7 +5,7 @@ from supabase import create_client, Client
 
 # 1. Configuração da página do Streamlit
 st.set_page_config(page_title="Relatório COA - Entrada de Cana", layout="wide")
-st.title("🚜 Romaneios Detalhados de Entrada de Cana (COA)")
+st.title("🚜 Estimado/Realizado - Hora/Hora")
 
 # Botão manual de emergência na barra lateral
 if st.sidebar.button("🔄 Atualizar Agora"):
@@ -112,7 +112,7 @@ else:
     df_visualizacao['Gleba'] = df_visualizacao['Gleba'].fillna(0).astype(int).astype(str)
     
     # Exibe a tabela de romaneios detalhados ocupando a tela cheia
-    st.markdown(f"### 📋 Registros de Romaneios do Dia: {data_selecionada.strftime('%d/%m/%Y')}")
+    st.markdown(f"### 📋 Estimado/Realizado: {data_selecionada.strftime('%d/%m/%Y')}")
     st.dataframe(df_visualizacao.style.format({
         'TC Real (Dia)': '{:,.2f}',
         'TC Total Gleba (Histórico)': '{:,.2f}',
