@@ -145,142 +145,91 @@ with st.spinner("Carregando dados da colheita..."):
 
 
 # 5. Processamento e Exibição Direta dos Dados
-
 if not dados_banco:
-
     st.warning(f"Nenhum registro encontrado para o dia {data_selecionada.strftime('%d/%m/%Y')}.")
-
 else:
-
     df_dia = pd.DataFrame(dados_banco)
-
     df_dia['gleba'] = pd.to_numeric(df_dia['gleba'], errors='coerce')
-
     colunas_num = ['tc_real', 'atr', 'mineral_pct', 'vegetal_pct']
-
     df_dia[colunas_num] = df_dia[colunas_num].apply(pd.to_numeric, errors='coerce').fillna(0.0)
 
-
-
     # Coleta o histórico cirúrgico das glebas do dia
-
     glebas_do_dia = df_dia['gleba'].dropna().unique().tolist()
-
     df_historico_glebas = buscar_historico_glebas_ativas(glebas_do_dia)
 
-
-
     # Filtro de Frentes na barra lateral
-
     lista_frentes = sorted(df_dia['frente'].unique().tolist())
-
     frentes_selecionadas = st.sidebar.multiselect("Selecione as Frentes:", options=lista_frentes, default=lista_frentes)
-
     
-
     df_filtrado = df_dia if not frentes_selecionadas else df_dia[df_dia['frente'].isin(frentes_selecionadas)]
 
-
-
     # Realiza o cruzamento exato com o histórico
-
     if not df_historico_glebas.empty:
-
         df_visualizacao = pd.merge(df_filtrado, df_historico_glebas, on='gleba', how='left')
-
     else:
-
         df_visualizacao = df_filtrado.copy()
-
         df_visualizacao['TC Total Gleba (Histórico)'] = 0.0
-
         
-
     df_visualizacao['TC Total Gleba (Histórico)'] = df_visualizacao['TC Total Gleba (Histórico)'].fillna(0.0)
-
     
-
     # Renomeia e ordena as colunas de exibição conforme solicitado
-
     df_visualizacao = df_visualizacao.rename(columns={
-
-    'frente': 'Frente',
-    'nome_fazenda': 'Fazenda',
-    'gleba': 'Gleba',
-
-    'tc_real': 'TC (Dia)',
-    'TC Total Gleba (Histórico)': 'TC (Acumulado)',
-
-    'atr': 'ATR',
-    'mineral_pct': 'Imp. Mineral',
-    'vegetal_pct': 'Imp. Vegetal'
-
-       })
-
+        'frente': 'Frente',
+        'nome_fazenda': 'Fazenda',
+        'gleba': 'Gleba',
+        'tc_real': 'TC (Dia)',
+        'TC Total Gleba (Histórico)': 'TC (Acumulado)',
+        'atr': 'ATR',
+        'mineral_pct': 'Imp. Mineral',
+        'vegetal_pct': 'Imp. Vegetal'
+    })
     
-
     ordem_colunas = [
-    'Frente',
-    'Fazenda',
-    'Gleba',
-    'TC (Dia)',
-    'TC (Acumulado)',
-    'ATR',
-    'Imp. Mineral',
-    'Imp. Vegetal'
-     ]
-
+        'Frente',
+        'Fazenda',
+        'Gleba',
+        'TC (Dia)',
+        'TC (Acumulado)',
+        'ATR',
+        'Imp. Mineral',
+        'Imp. Vegetal'
+    ]
     df_visualizacao = df_visualizacao[ordem_colunas].sort_values(by=['Frente', 'Fazenda', 'Gleba'])
-
     
-
     # Formata o ID da gleba para exibir limpo (como número inteiro em formato texto)
-
     df_visualizacao['Gleba'] = df_visualizacao['Gleba'].fillna(0).astype(int).astype(str)
-
     
+    # ==============================
+    # VISUAL BI - SOMENTE APRESENTAÇÃO (Movido para dentro do ELSE)
+    # ==============================
+    col1, col2, col3, col4 = st.columns(4)
 
-# ==============================
-# VISUAL BI - SOMENTE APRESENTAÇÃO
-# ==============================
+    col1.metric(
+        "🚜 TC Hoje",
+        f"{df_visualizacao['TC (Dia)'].sum():,.2f}"
+    )
 
-col1, col2, col3, col4 = st.columns(4)
+    col4.metric(
+        "📍 Glebas",
+        df_visualizacao['Gleba'].nunique()
+    )
 
+    st.divider()
 
-col1.metric(
-    "🚜 TC Hoje",
-    f"{df_visualizacao['TC (Dia)'].sum():,.2f}"
-)
+    st.markdown(
+        f"### 📋 Entrada de Cana {data_selecionada.strftime('%d/%m/%Y')}"
+    )
 
-col4.metric(
-    "📍 Glebas",
-    df_visualizacao['Gleba'].nunique()
-)
-
-
-st.divider()
-
-
-st.markdown(
-    f"### 📋 Entrada de Cana {data_selecionada.strftime('%d/%m/%Y')}"
-)
-
-
-st.dataframe(
-
-    df_visualizacao.style.format({
-
-        'TC (Dia)': '{:,.2f}',
-        'TC (Acumulado)': '{:,.2f}',
-        'ATR': '{:.2f}',
-        'Imp. Mineral': '{:.2f}',
-        'Imp. Vegetal': '{:.2f}'
-
-    }),
-
-    use_container_width=True,
-
-    hide_index=True,
-
-    height=700
-)
+    # Nota: Atualizado de use_container_width para width conforme os warnings do log
+    st.dataframe(
+        df_visualizacao.style.format({
+            'TC (Dia)': '{:,.2f}',
+            'TC (Acumulado)': '{:,.2f}',
+            'ATR': '{:.2f}',
+            'Imp. Mineral': '{:.2f}',
+            'Imp. Vegetal': '{:.2f}'
+        }),
+        width="stretch",
+        hide_index=True,
+        height=700
+    )
