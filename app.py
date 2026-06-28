@@ -1,242 +1,97 @@
-import streamlit as st
+# ==============================
+# DASHBOARD VISUAL COA
+# ==============================
 
-import pandas as pd
+from datetime import datetime
 
-from datetime import date
 
-from supabase import create_client, Client
+# KPIs
+col1, col2, col3, col4 = st.columns(4)
 
 
+total_tc_dia = df_visualizacao['TC Real (Dia)'].sum()
+total_hist = df_visualizacao['TC Total Gleba (Histórico)'].sum()
+atr_medio = df_visualizacao['ATR'].mean()
+qtde_glebas = df_visualizacao['Gleba'].nunique()
 
-# 1. Configuração da página do Streamlit
 
-st.set_page_config(page_title="Relatório COA - Entrada de Cana", layout="wide")
+with col1:
+    st.metric(
+        "🚜 TC Real Hoje",
+        f"{total_tc_dia:,.2f}"
+    )
 
-st.title("📋Hora/Hora Estimado/Realizado (COA)")
+with col2:
+    st.metric(
+        "🌱 TC Histórico",
+        f"{total_hist:,.2f}"
+    )
 
+with col3:
+    st.metric(
+        "🧪 ATR Médio",
+        f"{atr_medio:.2f}"
+    )
 
+with col4:
+    st.metric(
+        "📍 Glebas",
+        qtde_glebas
+    )
 
-# Botão manual de emergência na barra lateral
 
-if st.sidebar.button("🔄 Atualizar Agora"):
+st.divider()
 
-    st.rerun()
 
+hora_atual = datetime.now().strftime("%H:%M:%S")
 
 
-# Configuração do Auto-refresh de 30 minutos (1800 segundos) para atualizar a tela
-
-st.fragment(run_every=1800)
-
-
-
-# 2. Conexão com o Supabase
-
-SUPABASE_URL = st.secrets.get("SUPABASE_URL", "https://wavgbddjlwcqshohwuwn.supabase.co")
-
-SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhdmdiZGRqbHdjcXNob2h3dXduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODI1MzksImV4cCI6MjA5ODA1ODUzOX0.LPkP2vw0P_CCT5ZIDrzgdlnLCt8aOdEXVxLCY_7QqBw")
-
-
-
-@st.cache_resource
-
-def init_connection():
-
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
-
-
-
-try:
-
-    supabase: Client = init_connection()
-
-except Exception as e:
-
-    st.error(f"Erro ao conectar ao Supabase: {e}")
-
-    st.stop()
-
-
-
-# 3. FILTROS NA BARRA LATERAL
-
-st.sidebar.header("🔍 Filtros de Pesquisa")
-
-data_selecionada = st.sidebar.date_input("Selecione a data:", date.today())
-
-
-
-# 4. Busca dos dados do dia selecionado (Cache de 30 min)
-
-@st.cache_data(ttl=1800)
-
-def buscar_dados_cana(data_filtro):
-
-    data_str = data_filtro.strftime("%Y-%m-%d")
-
-    try:
-
-        resposta = supabase.table("APP COLHEITA").select("frente, nome_fazenda, gleba, atr, mineral_pct, vegetal_pct, tc_real").eq("data_saida", data_str).execute()
-
-        if resposta and hasattr(resposta, "data"):
-
-            return resposta.data
-
-        return []
-
-    except Exception as erro:
-
-        st.error(f"Erro na consulta do Supabase (Dados do Dia): {erro}")
-
-        return []
-
-
-
-# Busca o acumulado somado filtrando apenas pelas glebas que estão ativas no dia
-
-@st.cache_data(ttl=1800)
-
-def buscar_historico_glebas_ativas(lista_glebas):
-
-    if not lista_glebas:
-
-        return pd.DataFrame(columns=['gleba', 'TC Total Gleba (Histórico)'])
-
-    try:
-
-        lista_glebas_int = [int(g) for g in lista_glebas if pd.notna(g)]
-
-        resposta = supabase.table("APP COLHEITA").select("gleba, tc_real").in_("gleba", lista_glebas_int).execute()
-
-        
-
-        if resposta and hasattr(resposta, "data") and resposta.data:
-
-            df_hist = pd.DataFrame(resposta.data)
-
-            df_hist['gleba'] = pd.to_numeric(df_hist['gleba'], errors='coerce')
-
-            df_hist['tc_real'] = pd.to_numeric(df_hist['tc_real'], errors='coerce').fillna(0.0)
-
-            
-
-            df_acumulado = df_hist.groupby('gleba')['tc_real'].sum().reset_index()
-
-            df_acumulado.columns = ['gleba', 'TC Total Gleba (Histórico)']
-
-            return df_acumulado
-
-            
-
-        return pd.DataFrame(columns=['gleba', 'TC Total Gleba (Histórico)'])
-
-    except Exception as erro:
-
-        st.error(f"Erro ao calcular histórico das glebas: {erro}")
-
-        return pd.DataFrame(columns=['gleba', 'TC Total Gleba (Histórico)'])
-
-
-
-with st.spinner("Carregando dados da colheita..."):
-
-    dados_banco = buscar_dados_cana(data_selecionada)
-
-
-
-# 5. Processamento e Exibição Direta dos Dados
-
-if not dados_banco:
-
-    st.warning(f"Nenhum registro encontrado para o dia {data_selecionada.strftime('%d/%m/%Y')}.")
-
-else:
-
-    df_dia = pd.DataFrame(dados_banco)
-
-    df_dia['gleba'] = pd.to_numeric(df_dia['gleba'], errors='coerce')
-
-    colunas_num = ['tc_real', 'atr', 'mineral_pct', 'vegetal_pct']
-
-    df_dia[colunas_num] = df_dia[colunas_num].apply(pd.to_numeric, errors='coerce').fillna(0.0)
-
-
-
-    # Coleta o histórico cirúrgico das glebas do dia
-
-    glebas_do_dia = df_dia['gleba'].dropna().unique().tolist()
-
-    df_historico_glebas = buscar_historico_glebas_ativas(glebas_do_dia)
-
-
-
-    # Filtro de Frentes na barra lateral
-
-    lista_frentes = sorted(df_dia['frente'].unique().tolist())
-
-    frentes_selecionadas = st.sidebar.multiselect("Selecione as Frentes:", options=lista_frentes, default=lista_frentes)
-
+st.markdown(
+    f"""
+    <h2 style='text-align:center;'>
+    📋 Entrada de Cana - {data_selecionada.strftime('%d/%m/%Y')}
+    </h2>
     
+    <p style='text-align:center;color:#888'>
+    Última atualização: {hora_atual}
+    </p>
+    """,
+    unsafe_allow_html=True
+)
 
-    df_filtrado = df_dia if not frentes_selecionadas else df_dia[df_dia['frente'].isin(frentes_selecionadas)]
 
 
+# Tabela estilo BI
 
-    # Realiza o cruzamento exato com o histórico
+st.dataframe(
 
-    if not df_historico_glebas.empty:
+    df_visualizacao.style
 
-        df_visualizacao = pd.merge(df_filtrado, df_historico_glebas, on='gleba', how='left')
+    .format({
 
-    else:
+        'TC Real (Dia)': '{:,.2f}',
 
-        df_visualizacao = df_filtrado.copy()
+        'TC Total Gleba (Histórico)': '{:,.2f}',
 
-        df_visualizacao['TC Total Gleba (Histórico)'] = 0.0
+        'ATR': '{:.2f}',
 
-        
+        'Imp. Mineral': '{:.2f}',
 
-    df_visualizacao['TC Total Gleba (Histórico)'] = df_visualizacao['TC Total Gleba (Histórico)'].fillna(0.0)
-
-    
-
-    # Renomeia e ordena as colunas de exibição conforme solicitado
-
-    df_visualizacao = df_visualizacao.rename(columns={
-
-        'frente': 'Frente', 'nome_fazenda': 'Fazenda', 'gleba': 'Gleba',
-
-        'tc_real': 'TC Real (Dia)', 'atr': 'ATR', 'mineral_pct': 'Imp. Mineral', 'vegetal_pct': 'Imp. Vegetal'
+        'Imp. Vegetal': '{:.2f}'
 
     })
 
-    
+    .set_properties(
+        **{
+            'font-size':'13px',
+            'text-align':'center'
+        }
+    ),
 
-    ordem_colunas = ['Frente', 'Fazenda', 'Gleba', 'TC Real (Dia)', 'TC Total Gleba (Histórico)', 'ATR', 'Imp. Mineral', 'Imp. Vegetal']
-
-    df_visualizacao = df_visualizacao[ordem_colunas].sort_values(by=['Frente', 'Fazenda', 'Gleba'])
-
-    
-
-    # Formata o ID da gleba para exibir limpo (como número inteiro em formato texto)
-
-    df_visualizacao['Gleba'] = df_visualizacao['Gleba'].fillna(0).astype(int).astype(str)
-
-    
-
-st.dataframe(
-    df_visualizacao.style
-        .format({
-            'TC Real (Dia)': '{:,.2f}',
-            'TC Total Gleba (Histórico)': '{:,.2f}',
-            'ATR': '{:.2f}',
-            'Imp. Mineral': '{:.2f}',
-            'Imp. Vegetal': '{:.2f}'
-        })
-        .set_properties(**{
-            'font-size': '14px'
-        }),
     use_container_width=True,
+
     hide_index=True,
-    height=700
+
+    height=650
+
 )
