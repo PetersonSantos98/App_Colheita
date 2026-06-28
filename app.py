@@ -45,24 +45,27 @@ def buscar_dados_cana(data_filtro):
         st.error(f"Erro na consulta do Supabase (Dados do Dia): {erro}")
         return []
 
-# Busca o acumulado histórico agrupado por Gleba direto do banco (Otimizado)
+# Busca o acumulado histórico total de cada gleba sem filtros de data
 @st.cache_data(ttl=1800)
 def buscar_historico_por_gleba():
     try:
+        # Traz todas as linhas de gleba e tc_real da tabela inteira para consolidar
         resposta = supabase.table("APP COLHEITA").select("gleba, tc_real").execute()
         if resposta and hasattr(resposta, "data") and resposta.data:
             df_hist = pd.DataFrame(resposta.data)
-            df_hist['gleba'] = df_hist['gleba'].astype(str).str.strip()
+            
+            # Alinhamento crucial de tipos: convertendo gleba para numérico puro para evitar falha no merge
+            df_hist['gleba'] = pd.to_numeric(df_hist['gleba'], errors='coerce')
             df_hist['tc_real'] = pd.to_numeric(df_hist['tc_real'], errors='coerce').fillna(0.0)
             
-            # Agrupa para somar o total histórico de cada Gleba
+            # Agrupa e soma tudo por gleba de forma absoluta
             df_acumulado = df_hist.groupby('gleba')['tc_real'].sum().reset_index()
-            df_acumulado.columns = ['Gleba', 'TC Total Gleba (Histórico)']
+            df_acumulado.columns = ['gleba', 'TC Total Gleba (Histórico)']
             return df_acumulado
-        return pd.DataFrame(columns=['Gleba', 'TC Total Gleba (Histórico)'])
+        return pd.DataFrame(columns=['gleba', 'TC Total Gleba (Histórico)'])
     except Exception as erro:
         st.error(f"Erro ao calcular histórico por gleba: {erro}")
-        return pd.DataFrame(columns=['Gleba', 'TC Total Gleba (Histórico)'])
+        return pd.DataFrame(columns=['gleba', 'TC Total Gleba (Histórico)'])
 
 with st.spinner("Carregando dados da colheita..."):
     dados_banco = buscar_dados_cana(data_selecionada)
@@ -78,7 +81,7 @@ if not dados_banco:
 else:
     # Criando o DataFrame do dia
     df_dia = pd.DataFrame(dados_banco)
-    df_dia['gleba'] = df_dia['gleba'].astype(str).str.strip()
+    df_dia['gleba'] = pd.to_numeric(df_dia['gleba'], errors='coerce')
     colunas_num = ['tc_real', 'atr', 'mineral_pct', 'vegetal_pct']
     df_dia[colunas_num] = df_dia[colunas_num].apply(pd.to_numeric, errors='coerce').fillna(0.0)
 
@@ -88,7 +91,7 @@ else:
     
     df_filtrado = df_dia if not frentes_selecionadas else df_dia[df_dia['frente'].isin(frentes_selecionadas)]
 
-    # --- CARD DE METRICAS (Limpo, sem o TC Geral do banco todo no topo) ---
+    # --- CARD DE METRICAS ---
     st.subheader(f"📊 Resumo Geral - {data_selecionada.strftime('%d/%m/%Y')}")
     col1, col2, col3, col4 = st.columns(4)
     
@@ -134,22 +137,34 @@ else:
 
     with aba_detalhe:
         # Prepara a tabela bruta do dia
-        df_visualizacao = df_filtrado[['frente', 'nome_fazenda', 'gleba', 'tc_real', 'atr', 'mineral_pct', 'vegetal_pct']].copy()
-        df_visualizacao.columns = ['Frente', 'Fazenda', 'Gleba', 'TC Real (Dia)', 'ATR', 'Imp. Mineral', 'Imp. Vegetal']
+        df_visualizacao = df_filtrado.copy()
         
-        # Junta (Merge) o acumulado histórico daquela Gleba específica na tabela do dia
+        # Junta (Merge) usando correspondência numérica exata da coluna 'gleba'
         if not df_historico_glebas.empty:
-            df_visualizacao = pd.merge(df_visualizacao, df_historico_glebas, on='Gleba', how='left')
+            df_visualizacao = pd.merge(df_visualizacao, df_historico_glebas, on='gleba', how='left')
         else:
             df_visualizacao['TC Total Gleba (Histórico)'] = 0.0
             
         df_visualizacao['TC Total Gleba (Histórico)'] = df_visualizacao['TC Total Gleba (Histórico)'].fillna(0.0)
         
-        # Reorganiza a ordem das colunas para colocar o Histórico logo ao lado do Real do Dia
+        # Renomeia e ordena as colunas de exibição
+        df_visualizacao = df_visualizacao.rename(columns={
+            'frente': 'Frente',
+            'nome_fazenda': 'Fazenda',
+            'gleba': 'Gleba',
+            'tc_real': 'TC Real (Dia)',
+            'atr': 'ATR',
+            'mineral_pct': 'Imp. Mineral',
+            'vegetal_pct': 'Imp. Vegetal'
+        })
+        
         ordem_colunas = ['Frente', 'Fazenda', 'Gleba', 'TC Real (Dia)', 'TC Total Gleba (Histórico)', 'ATR', 'Imp. Mineral', 'Imp. Vegetal']
         df_visualizacao = df_visualizacao[ordem_colunas].sort_values(by='Frente')
         
-        # Formatação organizada para exibição amigável
+        # Garante a exibição correta e limpa dos números das glebas (sem ponto decimal na ID da gleba)
+        df_visualizacao['Gleba'] = df_visualizacao['Gleba'].fillna(0).astype(int).astype(str)
+        
+        # Formatação final estilizada
         st.dataframe(df_visualizacao.style.format({
             'TC Real (Dia)': '{:,.2f}',
             'TC Total Gleba (Histórico)': '{:,.2f}',
