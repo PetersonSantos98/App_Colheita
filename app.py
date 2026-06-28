@@ -7,10 +7,11 @@ from supabase import create_client, Client
 st.set_page_config(page_title="Relatório COA - Entrada de Cana", layout="wide")
 st.title("🚜 Relatório Diário de Entrada de Cana (COA)")
 
-# Botão manual de emergência e autorefresh de 30 min (1800s)
+# Botão manual de emergência na barra lateral
 if st.sidebar.button("🔄 Atualizar Agora"):
     st.rerun()
 
+# Configuração do Auto-refresh de 30 minutos (1800 segundos) para atualizar a tela
 st.fragment(run_every=1800)
 
 # 2. Conexão otimizada com o Supabase
@@ -37,7 +38,7 @@ def buscar_dados_cana(data_filtro):
     data_str = data_filtro.strftime("%Y-%m-%d")
     
     try:
-        # Faz a requisição ao Supabase
+        # Faz a requisição ao Supabase buscando apenas as colunas necessárias
         resposta = supabase.table("APP COLHEITA") \
             .select("frente, nome_fazenda, gleba, atr, mineral_pct, vegetal_pct, tc_real") \
             .eq("data_saida", data_str) \
@@ -47,7 +48,7 @@ def buscar_dados_cana(data_filtro):
         return respuesta.data
         
     except Exception as erro:
-        # Se der erro no Supabase (ex: coluna errada ou tabela inexistente), mostra na tela
+        # Captura erros de banco com segurança sem derrubar o app
         st.error(f"Erro na consulta do Supabase: {erro}")
         return []
 
