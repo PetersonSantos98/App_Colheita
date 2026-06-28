@@ -38,8 +38,8 @@ def buscar_dados_cana(data_filtro):
     data_str = data_filtro.strftime("%Y-%m-%d")
     
     try:
-        # Nome corrigido para APP_COLHEITA conforme a imagem do banco e query linearizada
-        resposta = supabase.table("APP_COLHEITA").select("frente, nome_fazenda, gleba, atr, mineral_pct, vegetal_pct, tc_real").eq("data_saida", data_str).execute()
+        # Nome corrigido com ESPAÇO EXATO conforme sugerido pelo Supabase: "APP COLHEITA"
+        resposta = supabase.table("APP COLHEITA").select("frente, nome_fazenda, gleba, atr, mineral_pct, vegetal_pct, tc_real").eq("data_saida", data_str).execute()
         
         if resposta and hasattr(resposta, 'data'):
             return respuesta.data
