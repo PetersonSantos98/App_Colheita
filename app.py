@@ -236,19 +236,6 @@ col1.metric(
     f"{df_visualizacao['TC Real (Dia)'].sum():,.2f}"
 )
 
-
-col2.metric(
-    "🌱 TC Histórico",
-    f"{df_visualizacao['TC Total Gleba (Histórico)'].sum():,.2f}"
-)
-
-
-col3.metric(
-    "🧪 ATR Médio",
-    f"{df_visualizacao['ATR'].mean():.2f}"
-)
-
-
 col4.metric(
     "📍 Glebas",
     df_visualizacao['Gleba'].nunique()
