@@ -112,7 +112,7 @@ else:
     df_visualizacao['Gleba'] = df_visualizacao['Gleba'].fillna(0).astype(int).astype(str)
     
     # Exibe a tabela de romaneios detalhados ocupando a tela cheia
-    st.markdown(f"### 📋 Frentes: {data_selecionada.strftime('%d/%m/%Y')}")
+    st.markdown(f"### Entrada de Cana: {data_selecionada.strftime('%d/%m/%Y')}")
     st.dataframe(df_visualizacao.style.format({
         'TC Real (Dia)': '{:,.2f}',
         'TC Total Gleba (Histórico)': '{:,.2f}',
