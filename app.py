@@ -36,25 +36,45 @@ data_selecionada = st.sidebar.date_input("Selecione a data:", date.today())
 @st.cache_data(ttl=1800)
 def buscar_dados_cana(data_filtro):
     data_str = data_filtro.strftime("%Y-%m-%d")
-    
     try:
-        # Consulta feita numa única linha contínua para evitar erros de sintaxe ou variáveis indefinidas
         resposta = supabase.table("APP COLHEITA").select("frente, nome_fazenda, gleba, atr, mineral_pct, vegetal_pct, tc_real").eq("data_saida", data_str).execute()
-        
         if resposta and hasattr(resposta, "data"):
             return resposta.data
         return []
-        
     except Exception as erro:
-        st.error(f"Erro na consulta do Supabase: {erro}")
+        st.error(f"Erro na consulta do Supabase (Dados do Dia): {erro}")
         return []
+
+# Função rápida para calcular a soma histórica total de toneladas direto no banco (Performance)
+@st.cache_data(ttl=1800)
+def buscar_tc_historico_total():
+    try:
+        # Traz apenas a coluna tc_real de toda a tabela para somar
+        resposta = supabase.table("APP COLHEITA").select("tc_real").execute()
+        if resposta and hasattr(resposta, "data") and resposta.data:
+            df_total = pd.DataFrame(resposta.data)
+            return pd.to_numeric(df_total['tc_real'], errors='coerce').sum()
+        return 0.0
+    except Exception as erro:
+        st.error(f"Erro ao calcular TC Histórico: {erro}")
+        return 0.0
 
 with st.spinner("Carregando dados da colheita..."):
     dados_banco = buscar_dados_cana(data_selecionada)
+    tc_historico_total = buscar_tc_historico_total()
+
+# Auxiliar para formatação de moeda/número padrão brasileiro (1.234,56)
+def formatar_peso(valor):
+    return f"{valor:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
 
 # 5. Processamento leve dos dados
 if not dados_banco:
     st.warning(f"Nenhum registro encontrado para o dia {data_selecionada.strftime('%d/%m/%Y')}.")
+    
+    # Mesmo sem dados no dia, exibe o acumulado histórico se houver
+    if tc_historico_total > 0:
+        st.subheader(f"📊 Acumulado Geral do Banco")
+        st.metric("TC Total Histórico (Todas as Datas)", f"{formatar_peso(tc_historico_total)} t")
 else:
     # Criando o DataFrame convertendo tipos de forma eficiente (otimização de memória)
     df_dia = pd.DataFrame(dados_banco)
@@ -69,16 +89,21 @@ else:
 
     # --- CARD DE METRICAS (Sempre visível no topo) ---
     st.subheader(f"📊 Resumo Geral - {data_selecionada.strftime('%d/%m/%Y')}")
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
-    total_tc_real = df_filtrado['tc_real'].sum()
-    col1.metric("Total Realizado", f"{total_tc_real:,.2f} t".replace(",", "v").replace(".", ",").replace("v", "."))
-    col2.metric("Frentes Exibidas", df_filtrado['frente'].nunique())
-    col3.metric("Fazendas", df_filtrado['nome_fazenda'].nunique())
+    # TC Real (Soma estrita do Dia Selecionado)
+    total_tc_real_dia = df_filtrado['tc_real'].sum()
+    col1.metric("TC Real (No Dia)", f"{formatar_peso(total_tc_real_dia)} t")
+    
+    # TC Total (Soma de todos os registros do banco independente da data)
+    col2.metric("TC Total Histórico", f"{formatar_peso(tc_historico_total)} t")
+    
+    col3.metric("Frentes Exibidas", df_filtrado['frente'].nunique())
+    col4.metric("Fazendas", df_filtrado['nome_fazenda'].nunique())
     
     df_com_atr = df_filtrado[df_filtrado['atr'] > 0]
     media_atr = df_com_atr['atr'].mean() if not df_com_atr.empty else 0.0
-    col4.metric("Média de ATR", f"{media_atr:.2f} kg/t")
+    col5.metric("Média de ATR", f"{media_atr:.2f} kg/t")
     
     st.markdown("---")
     
