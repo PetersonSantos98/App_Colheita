@@ -204,15 +204,31 @@ else:
 
     df_visualizacao = df_visualizacao.rename(columns={
 
-        'frente': 'Frente', 'nome_fazenda': 'Fazenda', 'gleba': 'Gleba',
+    'frente': 'Frente',
+    'nome_fazenda': 'Fazenda',
+    'gleba': 'Gleba',
 
-        'tc_real': 'TC Real (Dia)', 'atr': 'ATR', 'mineral_pct': 'Imp. Mineral', 'vegetal_pct': 'Imp. Vegetal'
+    'tc_real': 'TC (Dia)',
+    'TC Total Gleba (Histórico)': 'TC (Acumulado)',
 
-    })
+    'atr': 'ATR',
+    'mineral_pct': 'Imp. Mineral',
+    'vegetal_pct': 'Imp. Vegetal'
+
+       })
 
     
 
-    ordem_colunas = ['Frente', 'Fazenda', 'Gleba', 'TC Real (Dia)', 'TC Total Gleba (Histórico)', 'ATR', 'Imp. Mineral', 'Imp. Vegetal']
+    ordem_colunas = [
+    'Frente',
+    'Fazenda',
+    'Gleba',
+    'TC (Dia)',
+    'TC (Acumulado)',
+    'ATR',
+    'Imp. Mineral',
+    'Imp. Vegetal'
+     ]
 
     df_visualizacao = df_visualizacao[ordem_colunas].sort_values(by=['Frente', 'Fazenda', 'Gleba'])
 
@@ -232,8 +248,8 @@ col1, col2, col3, col4 = st.columns(4)
 
 
 col1.metric(
-    "🚜 TC Real Hoje",
-    f"{df_visualizacao['TC Real (Dia)'].sum():,.2f}"
+    "🚜 TC Hoje",
+    f"{df_visualizacao['TC (Dia)'].sum():,.2f}"
 )
 
 col4.metric(
@@ -254,8 +270,8 @@ st.dataframe(
 
     df_visualizacao.style.format({
 
-        'TC Real (Dia)': '{:,.2f}',
-        'TC Total Gleba (Histórico)': '{:,.2f}',
+        'TC (Dia)': '{:,.2f}',
+        'TC (Acumulado)': '{:,.2f}',
         'ATR': '{:.2f}',
         'Imp. Mineral': '{:.2f}',
         'Imp. Vegetal': '{:.2f}'
