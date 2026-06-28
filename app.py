@@ -4,8 +4,8 @@ from datetime import date
 from supabase import create_client, Client
 
 # 1. Configuração da página do Streamlit
-st.set_page_config(page_title="📋 Relatório COA - Entrada de Cana", layout="wide")
-st.title("Hora/Hora Estimado/Realizado (COA)")
+st.set_page_config(page_title="Relatório COA - Entrada de Cana", layout="wide")
+st.title("📋Hora/Hora Estimado/Realizado (COA)")
 
 # Botão manual de emergência na barra lateral
 if st.sidebar.button("🔄 Atualizar Agora"):
