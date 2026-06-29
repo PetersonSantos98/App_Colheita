@@ -242,11 +242,11 @@ st.divider()
 # CRIAÇÃO DAS ABAS
 # ==============================
 
-aba_grafico, aba_consolidado, aba_detalhe = st.tabs(
+aba_detalhe, aba_consolidado, aba_grafico = st.tabs(
     [
-        "📈 Gráfico por Frente",
+        "📋 Romaneios Detalhados",
         "🧮 Consolidado por Frente",
-        "📋 Romaneios Detalhados"
+        "📈 Gráfico por Frente"
     ]
 )
 
