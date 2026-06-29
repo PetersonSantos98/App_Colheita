@@ -24,9 +24,9 @@ if st.sidebar.button("🔄 Atualizar Agora"):
 
 
 
-# Configuração do Auto-refresh de 30 minutos (1800 segundos) para atualizar a tela
+# Configuração do Auto-refresh de 1 minuto
 
-st.fragment(run_every=1800)
+st.fragment(run_every=60)
 
 
 
@@ -66,9 +66,9 @@ data_selecionada = st.sidebar.date_input("Selecione a data:", date.today())
 
 
 
-# 4. Busca dos dados do dia selecionado (Cache de 30 min)
+# 4. Busca dos dados do dia selecionado (Cache de 1 min)
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=60)
 
 def buscar_dados_cana(data_filtro):
 
@@ -94,7 +94,7 @@ def buscar_dados_cana(data_filtro):
 
 # Busca o acumulado somado filtrando apenas pelas glebas que estão ativas no dia
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=60)
 
 def buscar_historico_glebas_ativas(lista_glebas):
 
