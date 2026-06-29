@@ -199,37 +199,161 @@ else:
     # Formata o ID da gleba para exibir limpo (como número inteiro em formato texto)
     df_visualizacao['Gleba'] = df_visualizacao['Gleba'].fillna(0).astype(int).astype(str)
     
-    # ==============================
-    # VISUAL BI - SOMENTE APRESENTAÇÃO (Movido para dentro do ELSE)
-    # ==============================
-    col1, col2, col3, col4 = st.columns(4)
+   # ==============================
+# ABAS DO RELATÓRIO
+# ==============================
 
-    col1.metric(
-        "🚜 TC Hoje",
-        f"{df_visualizacao['TC (Dia)'].sum():,.2f}"
+# Resumo geral
+st.subheader(f"📊 Resumo Geral - {data_selecionada.strftime('%d/%m/%Y')}")
+
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric(
+    "🚜 TC Hoje",
+    f"{df_visualizacao['TC (Dia)'].sum():,.2f}"
+)
+
+col2.metric(
+    "🚜 Frentes",
+    df_visualizacao['Frente'].nunique()
+)
+
+col3.metric(
+    "🏭 Fazendas",
+    df_visualizacao['Fazenda'].nunique()
+)
+
+media_atr = (
+    df_visualizacao[df_visualizacao['ATR'] > 0]['ATR'].mean()
+    if not df_visualizacao[df_visualizacao['ATR'] > 0].empty
+    else 0
+)
+
+col4.metric(
+    "📈 Média ATR",
+    f"{media_atr:.2f}"
+)
+
+
+st.divider()
+
+
+# ==============================
+# CRIAÇÃO DAS ABAS
+# ==============================
+
+aba_grafico, aba_consolidado, aba_detalhe = st.tabs(
+    [
+        "📈 Gráfico por Frente",
+        "🧮 Consolidado por Frente",
+        "📋 Romaneios Detalhados"
+    ]
+)
+
+
+
+# ==============================
+# ABA 1 - GRÁFICO
+# ==============================
+
+with aba_grafico:
+
+    df_grafico = (
+        df_visualizacao
+        .groupby('Frente')['TC (Dia)']
+        .sum()
+        .reset_index()
     )
 
-    col4.metric(
-        "📍 Glebas",
-        df_visualizacao['Gleba'].nunique()
+
+    if not df_grafico.empty:
+
+        st.bar_chart(
+            df_grafico,
+            x="Frente",
+            y="TC (Dia)"
+        )
+
+    else:
+
+        st.info("Sem dados para gráfico")
+
+
+
+# ==============================
+# ABA 2 - CONSOLIDADO
+# ==============================
+
+with aba_consolidado:
+
+
+    df_consolidado = (
+        df_visualizacao
+        .groupby('Frente')
+        .agg(
+            Total_TC=('TC (Dia)','sum'),
+            Media_ATR=('ATR','mean'),
+            Imp_Mineral=('Imp. Mineral','mean'),
+            Imp_Vegetal=('Imp. Vegetal','mean'),
+            Qtd_Glebas=('Gleba','nunique')
+        )
+        .reset_index()
     )
 
-    st.divider()
+
+    df_consolidado = df_consolidado.rename(
+        columns={
+            "Total_TC":"Total TC",
+            "Media_ATR":"Média ATR",
+            "Imp_Mineral":"Imp. Mineral",
+            "Imp_Vegetal":"Imp. Vegetal",
+            "Qtd_Glebas":"Qtd Glebas"
+        }
+    )
+
+
+    st.dataframe(
+
+        df_consolidado.style.format(
+            {
+                "Total TC":"{:,.2f}",
+                "Média ATR":"{:.2f}",
+                "Imp. Mineral":"{:.2f}",
+                "Imp. Vegetal":"{:.2f}"
+            }
+        ),
+
+        width="stretch",
+        hide_index=True
+
+    )
+
+# ==============================
+# ABA 3 - DETALHADO
+# ==============================
+
+with aba_detalhe:
+
 
     st.markdown(
         f"### 📋 Entrada de Cana {data_selecionada.strftime('%d/%m/%Y')}"
     )
 
-    # Nota: Atualizado de use_container_width para width conforme os warnings do log
+
     st.dataframe(
-        df_visualizacao.style.format({
-            'TC (Dia)': '{:,.2f}',
-            'TC (Acumulado)': '{:,.2f}',
-            'ATR': '{:.2f}',
-            'Imp. Mineral': '{:.2f}',
-            'Imp. Vegetal': '{:.2f}'
-        }),
+
+        df_visualizacao.style.format(
+            {
+                'TC (Dia)': '{:,.2f}',
+                'TC (Acumulado)': '{:,.2f}',
+                'ATR': '{:.2f}',
+                'Imp. Mineral': '{:.2f}',
+                'Imp. Vegetal': '{:.2f}'
+            }
+        ),
+
         width="stretch",
         hide_index=True,
         height=700
+
     )
