@@ -76,7 +76,7 @@ def buscar_dados_cana(data_filtro):
 
     try:
 
-        resposta = supabase.table("APP COLHEITA").select("frente, nome_fazenda, gleba, atr, mineral_pct, vegetal_pct, tc_real").eq("data_saida", data_str).execute()
+        resposta = supabase.table("APP COLHEITA").select("frente, nome_fazenda, gleba, atr, mineral_pct, vegetal_pct, tc_real, tc_estimado").eq("data_saida", data_str).execute()
 
         if resposta and hasattr(resposta, "data"):
 
@@ -150,7 +150,7 @@ if not dados_banco:
 else:
     df_dia = pd.DataFrame(dados_banco)
     df_dia['gleba'] = pd.to_numeric(df_dia['gleba'], errors='coerce')
-    colunas_num = ['tc_real', 'atr', 'mineral_pct', 'vegetal_pct']
+    colunas_num = ['tc_estimado','tc_real', 'atr', 'mineral_pct', 'vegetal_pct']
     df_dia[colunas_num] = df_dia[colunas_num].apply(pd.to_numeric, errors='coerce').fillna(0.0)
 
     # Coleta o histórico cirúrgico das glebas do dia
@@ -174,25 +174,27 @@ else:
     
     # Renomeia e ordena as colunas de exibição conforme solicitado
     df_visualizacao = df_visualizacao.rename(columns={
-        'frente': 'Frente',
-        'nome_fazenda': 'Fazenda',
-        'gleba': 'Gleba',
-        'tc_real': 'TC (Dia)',
-        'TC Total Gleba (Histórico)': 'TC (Acumulado)',
-        'atr': 'ATR',
-        'mineral_pct': 'Imp. Mineral',
-        'vegetal_pct': 'Imp. Vegetal'
+    'frente': 'Frente',
+    'nome_fazenda': 'Fazenda',
+    'gleba': 'Gleba',
+    'tc_real': 'TC (Dia)',
+    'tc_estimado': 'TC Estimado',
+    'TC Total Gleba (Histórico)': 'TC (Acumulado)',
+    'atr': 'ATR',
+    'mineral_pct': 'Imp. Mineral',
+    'vegetal_pct': 'Imp. Vegetal'
     })
     
     ordem_colunas = [
-        'Frente',
-        'Fazenda',
-        'Gleba',
-        'TC (Dia)',
-        'TC (Acumulado)',
-        'ATR',
-        'Imp. Mineral',
-        'Imp. Vegetal'
+    'Frente',
+    'Fazenda',
+    'Gleba',
+    'TC Estimado',
+    'TC (Dia)',
+    'TC (Acumulado)',
+    'ATR',
+    'Imp. Mineral',
+    'Imp. Vegetal'
     ]
     df_visualizacao = df_visualizacao[ordem_colunas].sort_values(by=['Frente', 'Fazenda', 'Gleba'])
     
@@ -342,14 +344,14 @@ with aba_detalhe:
 
     st.dataframe(
 
-        df_visualizacao.style.format(
-            {
-                'TC (Dia)': '{:,.2f}',
-                'TC (Acumulado)': '{:,.2f}',
-                'ATR': '{:.2f}',
-                'Imp. Mineral': '{:.2f}',
-                'Imp. Vegetal': '{:.2f}'
-            }
+       df_visualizacao.style.format({
+    'TC Estimado': '{:,.2f}',
+    'TC (Dia)': '{:,.2f}',
+    'TC (Acumulado)': '{:,.2f}',
+    'ATR': '{:.2f}',
+    'Imp. Mineral': '{:.2f}',
+    'Imp. Vegetal': '{:.2f}'
+    }
         ),
 
         width="stretch",
