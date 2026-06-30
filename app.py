@@ -13,88 +13,65 @@ st.set_page_config(
 
 
 # ==============================
-# ESTILO
+# PÁGINAS
 # ==============================
 
-st.markdown("""
-<style>
+paginas = {
 
-.card {
-    border: 1px solid #444;
-    padding: 25px;
-    border-radius: 12px;
-    text-align: center;
-    background: #11141a;
+    "OPERAÇÃO": [
+        st.Page(
+            "pages/1_Hora_Hora.py",
+            title="📋 Hora/Hora Estimado/Realizado"
+        ),
+
+        st.Page(
+            "pages/2_Consulta_Glebas.py",
+            title="🌱 Consulta por Gleba"
+        )
+    ]
+
 }
 
-.block-container {
-    padding-top: 2rem;
-}
 
-h2 {
-    margin-top: 1.5rem !important;
-    margin-bottom: 1rem !important;
-}
+# ==============================
+# NAVEGAÇÃO
+# ==============================
 
-</style>
-""", unsafe_allow_html=True)
+pg = st.navigation(paginas)
 
 
 # ==============================
 # MENU PRINCIPAL
 # ==============================
 
-st.title("🚜 Gestão COA")
+if pg:
 
-st.caption(
-    "Controle Operacional Agrícola - Menu Principal"
-)
+    pg.run()
 
+else:
 
-# ==============================
-# OPERAÇÃO
-# ==============================
+    st.title("🚜 Gestão COA")
 
-st.subheader("OPERAÇÃO")
-
-
-col1, col2 = st.columns(2)
-
-
-with col1:
-
-    st.page_link(
-        "pages/1_Hora_Hora.py",
-        label="📋 Hora/Hora Estimado/Realizado",
-        icon="📋"
+    st.caption(
+        "Controle Operacional Agrícola - Menu Principal"
     )
 
+    st.subheader("OPERAÇÃO")
 
-with col2:
-
-    st.page_link(
-        "pages/2_Consulta_Glebas.py",
-        label="🌱 Consulta por Gleba",
-        icon="🌱"
-    )
+    col1, col2 = st.columns(2)
 
 
-# ==============================
-# SISTEMA
-# ==============================
+    with col1:
 
-st.divider()
+        st.info(
+            "📋 Hora/Hora Estimado/Realizado\n\n"
+            "Use o menu lateral para acessar."
+        )
 
-st.subheader("SISTEMA")
 
+    with col2:
 
-if st.button(
-    "🔄 Atualizar Dados Globais",
-    use_container_width=True
-):
-
-    st.cache_data.clear()
-
-    st.success(
-        "Cache atualizado com sucesso!"
-    )
+        st.info(
+            "🌱 Consulta por Gleba\n\n"
+            "Use o menu lateral para acessar."
+        )
