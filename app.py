@@ -31,18 +31,28 @@ st.subheader("OPERAÇÃO")
 col1, col2 = st.columns(2)
 
 with col1:
-    st.page_link(
-        "pages/1_Hora_Hora.py",
-        label="📋 Hora/Hora Estimado/Realizado",
-        use_container_width=True
-    )
+    try:
+        st.page_link(
+            "pages/1_Hora_Hora.py",
+            label="📋 Hora/Hora Estimado/Realizado",
+            use_container_width=True
+        )
+    except Exception:
+        # Plano B caso o cache do servidor do Streamlit ainda não tenha atualizado a rota
+        if st.button("📋 Acessar Hora/Hora (Forçar Entrada)", use_container_width=True):
+            st.switch_page("pages/1_Hora_Hora.py")
 
 with col2:
-    st.page_link(
-        "pages/2_Consulta_Glebas.py",
-        label="🌱 Consulta por Gleba",
-        use_container_width=True
-    )
+    try:
+        st.page_link(
+            "pages/2_Consulta_Glebas.py",
+            label="🌱 Consulta por Gleba",
+            use_container_width=True
+        )
+    except Exception:
+        # Plano B caso o cache do servidor do Streamlit ainda não tenha atualizado a rota
+        if st.button("🌱 Acessar Consulta por Gleba (Forçar Entrada)", use_container_width=True):
+            st.switch_page("pages/2_Consulta_Glebas.py")
 
 # ==============================
 # SEÇÃO: INDICADORES
