@@ -32,14 +32,15 @@ col1, col2 = st.columns(2)
 
 with col1:
     try:
+        # Tentativa 1: Sem o prefixo da pasta, apenas o nome relativo (comportamento nativo)
         st.page_link(
             "pages/1_Hora_Hora.py",
             label="📋 Hora/Hora Estimado/Realizado",
             use_container_width=True
         )
     except Exception:
-        # Plano B caso o cache do servidor do Streamlit ainda não tenha atualizado a rota
-        if st.button("📋 Acessar Hora/Hora (Forçar Entrada)", use_container_width=True):
+        # Plano B: Tenta o redirecionamento se falhar no cache do link
+        if st.button("📋 Acessar Hora/Hora (Forçar)", use_container_width=True):
             st.switch_page("pages/1_Hora_Hora.py")
 
 with col2:
@@ -50,21 +51,10 @@ with col2:
             use_container_width=True
         )
     except Exception:
-        # Plano B caso o cache do servidor do Streamlit ainda não tenha atualizado a rota
-        if st.button("🌱 Acessar Consulta por Gleba (Forçar Entrada)", use_container_width=True):
+        if st.button("🌱 Acessar Consulta por Gleba (Forçar)", use_container_width=True):
             st.switch_page("pages/2_Consulta_Glebas.py")
 
-# ==============================
-# SEÇÃO: INDICADORES
-# ==============================
-st.subheader("INDICADORES")
-col3, col4 = st.columns(2)
-
-with col3:
-    st.button("📊 Produção", use_container_width=True)
-
-with col4:
-    st.button("📈 Eficiência", use_container_width=True)
+st.divider()
 
 # ==============================
 # SEÇÃO: SISTEMA
