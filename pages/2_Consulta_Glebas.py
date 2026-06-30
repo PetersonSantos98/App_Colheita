@@ -3,7 +3,7 @@ import pandas as pd
 from supabase import create_client
 
 # ======================================
-# CONFIGURAÇÃO
+# CONFIGURAÇÃO DA PÁGINA
 # ======================================
 
 st.set_page_config(
@@ -15,7 +15,7 @@ st.set_page_config(
 st.title("🌱 Consulta de Glebas")
 
 # ======================================
-# SUPABASE
+# CONEXÃO COM O SUPABASE
 # ======================================
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -27,32 +27,33 @@ supabase = create_client(
 )
 
 # ======================================
-# CARREGAR DADOS
+# FUNÇÃO PARA CARREGAR DADOS (CACHE: 60s)
 # ======================================
 
 @st.cache_data(ttl=60)
 def carregar_dados():
-    # .order("data_saida", ascending=False) traz as datas mais recentes primeiro,
-    # garantindo que os dados novos entrem no limite de linhas da API do Supabase.
+    # Coleta os registros trazendo as datas mais recentes primeiro 
+    # Isso evita que os dados novos sumam devido ao limite de linhas do Supabase
     resposta = (
         supabase
         .table("APP COLHEITA")
         .select("*")
-        .order("data_saida", ascending=False)
+        .order("data_saida", desc=True)
         .execute()
     )
 
     df = pd.DataFrame(resposta.data)
 
     if not df.empty:
+        # Formata a coluna de data de saída
         if "data_saida" in df.columns:
             df["data_saida"] = pd.to_datetime(
                 df["data_saida"],
                 errors="coerce"
             )
         
+        # Faz a limpeza e garante o tipo inteiro puro para a coluna de glebas
         if "gleba" in df.columns:
-            # Converte para numérico e remove nulos para evitar float .0
             df["gleba"] = pd.to_numeric(df["gleba"], errors="coerce")
             df = df.dropna(subset=["gleba"])
             df["gleba"] = df["gleba"].astype(int)
@@ -60,21 +61,20 @@ def carregar_dados():
     return df
 
 
+# Executa a carga de dados
 dados = carregar_dados()
 
 if dados.empty:
-    st.warning("Nenhum dado encontrado.")
+    st.warning("Nenhum dado encontrado na tabela 'APP COLHEITA'.")
     st.stop()
 
 # ======================================
-# FILTRO
+# BARRA LATERAL - FILTROS
 # ======================================
 
-# Coleta a lista convertendo estritamente para int padrão do Python para o multiselect
+# Monta a lista única de glebas inteiras presentes no dataframe
 lista_glebas = (
     dados["gleba"]
-    .dropna()
-    .astype(int)
     .sort_values()
     .unique()
     .tolist()
@@ -87,20 +87,19 @@ glebas_sel = st.sidebar.multiselect(
     options=lista_glebas,
     placeholder="Digite a gleba..."
 )
+
 # ======================================
-# CONSULTA
+# PAINEL PRINCIPAL - CONSULTA
 # ======================================
 
 if glebas_sel:
+    # Filtra as linhas com base nas glebas selecionadas na lista lateral
+    resultado = dados[dados["gleba"].isin(glebas_sel)].copy()
 
-    # Corrigido a comparação garantindo tipo numérico inteiro
-    resultado = dados[
-        dados["gleba"].astype(int).isin(glebas_sel)
-    ].copy()
-
+    # Cálculo dos totais reais realizados
     tc_real = resultado["tc_real"].sum()
 
-    # Pega o primeiro estimado de cada gleba para evitar duplicar a meta
+    # Agrupa por gleba e pega apenas o primeiro valor estimado para não inflar a meta
     tc_estimado = (
         resultado
         .groupby("gleba")["tc_estimado"]
@@ -108,11 +107,13 @@ if glebas_sel:
         .sum()
     )
 
+    # Cálculo da porcentagem de conclusão de forma segura
     percentual = (
         (tc_real / tc_estimado) * 100
         if tc_estimado > 0 else 0
     )
 
+    # Exibição dos Blocos de KPI (Métricas)
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -135,7 +136,7 @@ if glebas_sel:
 
     st.divider()
 
-    # Agrupamento da tabela mantendo o primeiro estimado de cada gleba por frente
+    # Construção e agrupamento da tabela detalhada por Frente
     tabela = (
         resultado
         .groupby(
@@ -153,6 +154,7 @@ if glebas_sel:
         )
     )
 
+    # Renomeação visual das colunas do DataFrame
     tabela = tabela.rename(
         columns={
             "gleba": "Gleba",
@@ -162,6 +164,7 @@ if glebas_sel:
         }
     )
 
+    # Exibição da tabela final formatada
     st.dataframe(
         tabela,
         use_container_width=True,
@@ -169,5 +172,5 @@ if glebas_sel:
     )
 
 else:
-
-    st.info("Selecione uma ou mais glebas na barra lateral.")
+    # Mensagem informativa padrão enquanto nenhuma opção estiver ativa
+    st.info("Selecione uma ou mais glebas na barra lateral para detalhar os dados.")
