@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
 
-# ==================================
-# CONFIGURAÇÃO DA PÁGINA
-# ==================================
+# =====================================
+# CONFIGURAÇÃO
+# =====================================
 
 st.set_page_config(
     page_title="Consulta de Glebas",
@@ -14,9 +14,9 @@ st.set_page_config(
 
 st.title("🌱 Consulta de Glebas")
 
-# ==================================
-# CONEXÃO SUPABASE
-# ==================================
+# =====================================
+# SUPABASE
+# =====================================
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -26,90 +26,117 @@ supabase: Client = create_client(
     SUPABASE_KEY
 )
 
-# ==================================
+# =====================================
 # CARREGA DADOS
-# ==================================
+# =====================================
 
 @st.cache_data(ttl=1800)
 def carregar_dados():
 
     resposta = (
         supabase
-        .table("APP COLHEITA")
-        .select("gleba, tc_real, tc_estimado")
+        .table("APP_COLHEITA")
+        .select(
+            "gleba,data_saida,tc_real,tc_estimado"
+        )
         .execute()
     )
 
-    return pd.DataFrame(resposta.data)
+    df = pd.DataFrame(resposta.data)
+
+    if not df.empty:
+
+        df["data_saida"] = pd.to_datetime(
+            df["data_saida"]
+        )
+
+    return df
 
 
 dados = carregar_dados()
 
-# ==================================
+# =====================================
 # SIDEBAR
-# ==================================
+# =====================================
 
 st.sidebar.header("🔎 Filtro")
 
-if dados.empty:
-    st.warning("Nenhum dado encontrado.")
-    st.stop()
-
-lista_glebas = sorted(
-    dados["gleba"]
-    .dropna()
-    .unique()
-    .tolist()
+gleba = st.sidebar.text_input(
+    "Digite a Gleba"
 )
 
-glebas = st.sidebar.multiselect(
-    "Selecione a Gleba",
-    lista_glebas
-)
+# =====================================
+# CONSULTA
+# =====================================
 
-# ==================================
-# RESULTADO
-# ==================================
-
-if glebas:
+if gleba:
 
     resultado = dados[
-        dados["gleba"].isin(glebas)
+        dados["gleba"]
+        .astype(str)
+        .str.contains(
+            gleba,
+            case=False,
+            na=False
+        )
     ]
 
-    tc_real = resultado["tc_real"].sum()
+    if resultado.empty:
 
-    tc_estimado = (
-        resultado
-        .groupby("gleba")["tc_estimado"]
-        .first()
-        .sum()
-    )
+        st.warning("Nenhuma gleba encontrada.")
 
-    col1, col2 = st.columns(2)
+    else:
 
-    with col1:
-        st.metric(
-            "🌱 TC Acumulado Realizado",
-            f"{tc_real:,.2f}"
+        tc_real = resultado["tc_real"].sum()
+
+        tc_estimado = (
+            resultado
+            .groupby("gleba")["tc_estimado"]
+            .first()
+            .sum()
         )
 
-    with col2:
-        st.metric(
-            "📋 TC Estimado",
-            f"{tc_estimado:,.2f}"
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.metric(
+                "🌱 TC Acumulado Realizado",
+                f"{tc_real:,.2f}"
+            )
+
+        with col2:
+            st.metric(
+                "📋 TC Estimado",
+                f"{tc_estimado:,.2f}"
+            )
+
+        st.divider()
+
+        st.subheader("Dados encontrados")
+
+        tabela = resultado.copy()
+
+        tabela["data_saida"] = tabela[
+            "data_saida"
+        ].dt.strftime("%d/%m/%Y")
+
+        tabela = tabela.sort_values(
+            "data_saida"
         )
 
-    st.divider()
-
-    st.subheader("Dados encontrados")
-
-    st.dataframe(
-        resultado.sort_values("gleba"),
-        use_container_width=True,
-        hide_index=True
-    )
+        st.dataframe(
+            tabela[
+                [
+                    "gleba",
+                    "data_saida",
+                    "tc_real",
+                    "tc_estimado"
+                ]
+            ],
+            use_container_width=True,
+            hide_index=True
+        )
 
 else:
 
-    st.info("Selecione uma ou mais glebas na barra lateral.")
+    st.info("Digite uma gleba no filtro ao lado.")
