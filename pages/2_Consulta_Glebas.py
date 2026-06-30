@@ -2,8 +2,9 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client
 
+
 # ======================================
-# CONFIGURAÇÃO DA PÁGINA
+# CONFIG
 # ======================================
 
 st.set_page_config(
@@ -14,138 +15,211 @@ st.set_page_config(
 
 st.title("🌱 Consulta de Glebas")
 
+
 # ======================================
-# CONEXÃO COM O SUPABASE
+# SUPABASE
 # ======================================
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY
+)
+
 
 # ======================================
-# 1. QUERY ULTRA LEVE: APENAS LISTA DE GLEBAS
+# BUSCA APENAS GLEBAS
 # ======================================
 
-@st.cache_data(ttl=60)
-def obter_lista_glebas():
-    # Puxa apenas a coluna 'gleba' para montar o filtro lateral sem carregar peso
+@st.cache_data(ttl=300)
+def buscar_glebas():
+
     resposta = (
         supabase
         .table("APP COLHEITA")
         .select("gleba")
         .execute()
     )
-    df_fnd = pd.DataFrame(resposta.data)
-    if not df_fnd.empty and "gleba" in df_fnd.columns:
-        df_fnd["gleba"] = pd.to_numeric(df_fnd["gleba"], errors="coerce")
-        return sorted(df_fnd["gleba"].dropna().unique().astype(int).tolist())
-    return []
+
+    df = pd.DataFrame(resposta.data)
+
+    if df.empty:
+        return []
+
+    df["gleba"] = pd.to_numeric(
+        df["gleba"],
+        errors="coerce"
+    )
+
+    df = df.dropna()
+
+    return (
+        df["gleba"]
+        .astype(int)
+        .unique()
+        .tolist()
+    )
+
 
 # ======================================
-# 2. QUERY DINÂMICA: BUSCA APENAS O NECESSÁRIO
+# BUSCA SOMENTE A GLEBA ESCOLHIDA
 # ======================================
 
-def carregar_dados_filtrados(glebas_selecionadas):
-    # Transforma a lista de inteiros em string para a API do Supabase
-    lista_busca = [str(g) for g in glebas_selecionadas]
-    
-    # O banco faz o trabalho duro! Filtra usando o operador .in_
+@st.cache_data(ttl=60)
+def buscar_dados_gleba(lista_glebas):
+
     resposta = (
         supabase
         .table("APP COLHEITA")
         .select("*")
-        .in_("gleba", lista_busca)
-        .order("data_saida", desc=True)
+        .in_("gleba", lista_glebas)
         .execute()
     )
-    
+
+
     df = pd.DataFrame(resposta.data)
-    
+
+
     if not df.empty:
-        if "data_saida" in df.columns:
-            df["data_saida"] = pd.to_datetime(df["data_saida"], errors="coerce")
-        if "gleba" in df.columns:
-            df["gleba"] = pd.to_numeric(df["gleba"], errors="coerce").astype(int)
-            
+
+        df["gleba"] = pd.to_numeric(
+            df["gleba"],
+            errors="coerce"
+        )
+
+        df["tc_real"] = pd.to_numeric(
+            df["tc_real"],
+            errors="coerce"
+        )
+
+        df["tc_estimado"] = pd.to_numeric(
+            df["tc_estimado"],
+            errors="coerce"
+        )
+
     return df
 
+
+
 # ======================================
-# BARRA LATERAL - FILTROS
+# FILTRO
 # ======================================
 
-lista_glebas = obter_lista_glebas()
 
-st.sidebar.header("🔎 Pesquisa")
+lista = buscar_glebas()
 
-glebas_sel = st.sidebar.multiselect(
-    "Pesquise e selecione uma ou mais glebas",
-    options=lista_glebas,
-    placeholder="Digite a gleba..."
+
+st.sidebar.header("🔎 Filtro")
+
+glebas = st.sidebar.multiselect(
+    "Selecione a gleba",
+    lista
 )
 
+
+
 # ======================================
-# PAINEL PRINCIPAL - CONSULTA
+# RESULTADO
 # ======================================
 
-if glebas_sel:
-    # Busca no banco apenas as linhas das glebas selecionadas (Sem limite de 1000 que quebre o histórico!)
-    resultado = carregar_dados_filtrados(glebas_sel)
+if glebas:
 
-    if not resultado.empty:
-        # Cálculo dos totais reais realizados
-        tc_real = resultado["tc_real"].sum()
 
-        # Agrupa por gleba e pega apenas o primeiro valor estimado para não inflar a meta
-        tc_estimado = (
-            resultado
-            .groupby("gleba")["tc_estimado"]
-            .first()
-            .sum()
+    dados = buscar_dados_gleba(
+        glebas
+    )
+
+
+    if dados.empty:
+
+        st.warning(
+            "Nenhum dado encontrado."
         )
 
-        # Cálculo da porcentagem de conclusão de forma segura
-        percentual = (
-            (tc_real / tc_estimado) * 100
-            if tc_estimado > 0 else 0
+        st.stop()
+
+
+
+    tc_real = dados["tc_real"].sum()
+
+
+    tc_estimado = (
+        dados
+        .groupby("gleba")
+        ["tc_estimado"]
+        .first()
+        .sum()
+    )
+
+
+    percentual = (
+        tc_real / tc_estimado * 100
+        if tc_estimado > 0
+        else 0
+    )
+
+
+
+    c1,c2,c3 = st.columns(3)
+
+
+    c1.metric(
+        "🌱 Realizado",
+        f"{tc_real:,.2f}"
+    )
+
+
+    c2.metric(
+        "📋 Estimado",
+        f"{tc_estimado:,.2f}"
+    )
+
+
+    c3.metric(
+        "📈 Concluído",
+        f"{percentual:.1f}%"
+    )
+
+
+
+    st.divider()
+
+
+
+    tabela = (
+        dados
+        .groupby(
+            ["gleba","frente"],
+            as_index=False
         )
-
-        # Exibição dos Blocos de KPI (Métricas)
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            st.metric("🌱 TC Acumulado Realizado", f"{tc_real:,.2f}")
-
-        with col2:
-            st.metric("📋 TC Estimado", f"{tc_estimado:,.2f}")
-
-        with col3:
-            st.metric("📈 % Concluído", f"{percentual:.1f}%")
-
-        st.divider()
-
-        # Construção e agrupamento da tabela detalhada por Frente
-        tabela = (
-            resultado
-            .groupby(["gleba", "frente"], as_index=False)
-            .agg({"tc_real": "sum", "tc_estimado": "first"})
-            .sort_values(["gleba", "frente"])
-        )
-
-        # Renomeação visual das colunas do DataFrame
-        tabela = tabela.rename(
-            columns={
-                "gleba": "Gleba",
-                "frente": "Frente",
-                "tc_real": "TC Real",
-                "tc_estimado": "TC Estimado"
+        .agg(
+            {
+                "tc_real":"sum",
+                "tc_estimado":"first"
             }
         )
+    )
 
-        # Exibição da tabela final formatada
-        st.dataframe(tabela, use_container_width=True, hide_index=True)
-    else:
-        st.warning("Nenhum dado detalhado encontrado para as glebas selecionadas.")
+
+    tabela.columns = [
+        "Gleba",
+        "Frente",
+        "TC Real",
+        "TC Estimado"
+    ]
+
+
+    st.dataframe(
+        tabela,
+        use_container_width=True,
+        hide_index=True
+    )
+
 
 else:
-    st.info("Selecione uma ou mais glebas na barra lateral para detalhar os dados.")
+
+    st.info(
+        "Selecione uma gleba."
+    )
