@@ -30,7 +30,6 @@ supabase = create_client(
 # CARREGAR DADOS
 # ======================================
 
-# Atualizado para 60 segundos conforme solicitado
 @st.cache_data(ttl=60)
 def carregar_dados():
 
@@ -43,11 +42,17 @@ def carregar_dados():
 
     df = pd.DataFrame(resposta.data)
 
-    if not df.empty and "data_saida" in df.columns:
-        df["data_saida"] = pd.to_datetime(
-            df["data_saida"],
-            errors="coerce"
-        )
+    if not df.empty:
+        # Garante que a coluna de data seja convertida corretamente
+        if "data_saida" in df.columns:
+            df["data_saida"] = pd.to_datetime(
+                df["data_saida"],
+                errors="coerce"
+            )
+        
+        # CORREÇÃO CRÍTICA: Força a coluna gleba a ser inteira, mesmo se houver nulos
+        if "gleba" in df.columns:
+            df["gleba"] = pd.to_numeric(df["gleba"], errors="coerce").astype("Int64")
 
     return df
 
@@ -62,7 +67,7 @@ if dados.empty:
 # FILTRO
 # ======================================
 
-# Corrigido para carregar como int para bater com o tipo do Supabase
+# Coleta a lista convertendo estritamente para int padrão do Python para o multiselect
 lista_glebas = (
     dados["gleba"]
     .dropna()
@@ -79,7 +84,6 @@ glebas_sel = st.sidebar.multiselect(
     options=lista_glebas,
     placeholder="Digite a gleba..."
 )
-
 # ======================================
 # CONSULTA
 # ======================================
