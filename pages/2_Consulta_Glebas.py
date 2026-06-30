@@ -58,10 +58,10 @@ if dados.empty:
     st.stop()
 
 # ======================================
-# LISTA DE GLEBAS
+# FILTRO
 # ======================================
 
-glebas = (
+lista_glebas = (
     dados["gleba"]
     .dropna()
     .astype(str)
@@ -70,30 +70,32 @@ glebas = (
     .tolist()
 )
 
-# ======================================
-# SIDEBAR
-# ======================================
-
 st.sidebar.header("🔎 Pesquisa")
 
-gleba = st.sidebar.selectbox(
-    "Pesquise ou selecione a Gleba",
-    [""] + glebas
+glebas_sel = st.sidebar.multiselect(
+    "Pesquise e selecione uma ou mais glebas",
+    options=lista_glebas,
+    placeholder="Digite a gleba..."
 )
 
 # ======================================
 # CONSULTA
 # ======================================
 
-if gleba:
+if glebas_sel:
 
     resultado = dados[
-        dados["gleba"].astype(str) == gleba
+        dados["gleba"].astype(str).isin(glebas_sel)
     ].copy()
 
     tc_real = resultado["tc_real"].sum()
 
-    tc_estimado = resultado["tc_estimado"].iloc[0]
+    tc_estimado = (
+        resultado
+        .groupby("gleba")["tc_estimado"]
+        .first()
+        .sum()
+    )
 
     percentual = (
         (tc_real / tc_estimado) * 100
@@ -122,29 +124,38 @@ if gleba:
 
     st.divider()
 
-    if "data_saida" in resultado.columns:
-        resultado["data_saida"] = resultado["data_saida"].dt.strftime("%d/%m/%Y")
+    tabela = (
+        resultado
+        .groupby(
+            ["gleba", "frente"],
+            as_index=False
+        )
+        .agg(
+            {
+                "tc_real": "sum",
+                "tc_estimado": "first"
+            }
+        )
+        .sort_values(
+            ["gleba", "frente"]
+        )
+    )
 
-    colunas = [
-        "data_saida",
-        "frente",
-        "nome_fazenda",
-        "gleba",
-        "atr",
-        "mineral_pct",
-        "vegetal_pct",
-        "tc_real",
-        "tc_estimado"
-    ]
-
-    colunas = [c for c in colunas if c in resultado.columns]
+    tabela = tabela.rename(
+        columns={
+            "gleba": "Gleba",
+            "frente": "Frente",
+            "tc_real": "TC Real",
+            "tc_estimado": "TC Estimado"
+        }
+    )
 
     st.dataframe(
-        resultado[colunas].sort_values("data_saida"),
+        tabela,
         use_container_width=True,
         hide_index=True
     )
 
 else:
 
-    st.info("Selecione uma gleba na barra lateral.")
+    st.info("Selecione uma ou mais glebas na barra lateral.")
