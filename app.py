@@ -13,6 +13,7 @@ st.set_page_config(
     layout="wide"
 )
 
+
 st.title("📋Hora/Hora Estimado/Realizado (COA)")
 
 
@@ -32,9 +33,24 @@ st.fragment(run_every=60)
 
 
 
-# 2. Conexão com o Supabase 
-SUPABASE_URL = st.secrets.get("SUPABASE_URL", "https://wavgbddjlwcqshohwuwn.supabase.co") 
-SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhdmdiZGRqbHdjcXNob2h3dXduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODI1MzksImV4cCI6MjA5ODA1ODUzOX0.LPkP2vw0P_CCT5ZIDrzgdlnLCt8aOdEXVxLCY_7QqBw")
+# ==============================
+# SUPABASE
+# ==============================
+
+
+SUPABASE_URL = st.secrets.get(
+    "SUPABASE_URL",
+    "https://wavgbddjlwcqshohwuwn.supabase.co"
+)
+
+
+
+SUPABASE_KEY = st.secrets.get(
+    "SUPABASE_KEY",
+    "eyJhbGciOiJI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhdmdiZGRqbHdjcXNob2h3dXduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODI1MzksImV4cCI6MjA5ODA1ODUzOX0.LPkP2vw0P_CCT5ZIDrzgdlnLCt8aOdEXVxLCY_7QqBw"
+)
+
+
 
 @st.cache_resource
 
@@ -80,6 +96,8 @@ data_selecionada = st.sidebar.date_input(
 
 
 
+
+
 # ==============================
 # BUSCA DIA
 # ==============================
@@ -90,33 +108,38 @@ data_selecionada = st.sidebar.date_input(
 def buscar_dados_cana(data_filtro):
 
 
-    data_str = data_filtro.strftime("%Y-%m-%d")
+    data_str = data_filtro.strftime(
+        "%Y-%m-%d"
+    )
 
 
     try:
 
 
-        resposta = supabase.table(
-            "APP COLHEITA"
-        ).select(
-            """
-            frente,
-            nome_fazenda,
-            gleba,
-            atr,
-            mineral_pct,
-            vegetal_pct,
-            tc_real,
-            tc_estimado
-            """
-        ).eq(
-            "data_saida",
-            data_str
-        ).execute()
+        resposta = (
+            supabase
+            .table("APP COLHEITA")
+            .select(
+                """
+                frente,
+                nome_fazenda,
+                gleba,
+                atr,
+                mineral_pct,
+                vegetal_pct,
+                tc_real,
+                tc_estimado
+                """
+            )
+            .eq(
+                "data_saida",
+                data_str
+            )
+            .execute()
+        )
 
 
-
-        return resposta.data if hasattr(resposta,"data") else []
+        return resposta.data
 
 
 
@@ -134,7 +157,7 @@ def buscar_dados_cana(data_filtro):
 
 
 # ==============================
-# HISTÓRICO
+# HISTÓRICO GLEBAS
 # ==============================
 
 
@@ -145,33 +168,43 @@ def buscar_historico_glebas_ativas(lista_glebas):
 
     if not lista_glebas:
 
-        return pd.DataFrame(
-            columns=[
-                'gleba',
-                'TC Total Gleba (Histórico)'
-            ]
-        )
+        return pd.DataFrame()
+
 
 
     try:
 
 
         lista = [
-            int(g)
-            for g in lista_glebas
-            if pd.notna(g)
+
+            int(x)
+
+            for x in lista_glebas
+
+            if pd.notna(x)
+
         ]
 
 
 
-        resposta = supabase.table(
-            "APP COLHEITA"
-        ).select(
-            "gleba, tc_real"
-        ).in_(
-            "gleba",
-            lista
-        ).execute()
+        resposta = (
+
+            supabase
+
+            .table("APP COLHEITA")
+
+            .select(
+                "gleba, tc_real"
+            )
+
+            .in_(
+                "gleba",
+                lista
+            )
+
+            .execute()
+
+        )
 
 
 
@@ -183,34 +216,43 @@ def buscar_historico_glebas_ativas(lista_glebas):
             )
 
 
-            df['gleba'] = pd.to_numeric(
-                df['gleba'],
-                errors='coerce'
+
+            df["gleba"] = pd.to_numeric(
+                df["gleba"],
+                errors="coerce"
             )
 
 
-            df['tc_real'] = pd.to_numeric(
-                df['tc_real'],
-                errors='coerce'
+
+            df["tc_real"] = pd.to_numeric(
+                df["tc_real"],
+                errors="coerce"
             ).fillna(0)
 
 
 
-            retorno = (
-                df.groupby('gleba')
-                ['tc_real']
+            acumulado = (
+
+                df.groupby("gleba")
+                ["tc_real"]
                 .sum()
                 .reset_index()
+
             )
 
 
-            retorno.columns = [
-                'gleba',
-                'TC Total Gleba (Histórico)'
+
+            acumulado.columns = [
+
+                "gleba",
+
+                "TC Total Gleba (Histórico)"
+
             ]
 
 
-            return retorno
+
+            return acumulado
 
 
 
@@ -225,20 +267,15 @@ def buscar_historico_glebas_ativas(lista_glebas):
             f"Erro histórico: {erro}"
         )
 
+
         return pd.DataFrame()
 
-
-
-
-
 # ==============================
-# PROCESSAMENTO
+# CARREGAMENTO DOS DADOS
 # ==============================
 
 
-with st.spinner(
-    "Carregando dados..."
-):
+with st.spinner("Carregando dados da colheita..."):
 
 
     dados_banco = buscar_dados_cana(
@@ -247,11 +284,16 @@ with st.spinner(
 
 
 
+# ==============================
+# PROCESSAMENTO
+# ==============================
+
+
 if not dados_banco:
 
 
     st.warning(
-        "Nenhum registro encontrado."
+        f"Nenhum registro encontrado para {data_selecionada.strftime('%d/%m/%Y')}"
     )
 
 
@@ -263,82 +305,128 @@ else:
     )
 
 
-    df_dia['gleba'] = pd.to_numeric(
-        df_dia['gleba'],
-        errors='coerce'
+
+    df_dia["gleba"] = pd.to_numeric(
+        df_dia["gleba"],
+        errors="coerce"
     )
 
 
-    colunas = [
 
-        'tc_estimado',
-        'tc_real',
-        'atr',
-        'mineral_pct',
-        'vegetal_pct'
+    colunas_num = [
+
+        "tc_estimado",
+        "tc_real",
+        "atr",
+        "mineral_pct",
+        "vegetal_pct"
 
     ]
 
 
-    df_dia[colunas] = (
-        df_dia[colunas]
+
+    df_dia[colunas_num] = (
+
+        df_dia[colunas_num]
+
         .apply(
             pd.to_numeric,
-            errors='coerce'
+            errors="coerce"
         )
+
         .fillna(0)
+
     )
 
 
 
-    glebas = (
-        df_dia['gleba']
+    # Histórico das glebas
+
+    glebas_do_dia = (
+
+        df_dia["gleba"]
+
         .dropna()
+
         .unique()
+
         .tolist()
-    )
 
-
-    df_hist = buscar_historico_glebas_ativas(
-        glebas
     )
 
 
 
-    frentes = sorted(
-        df_dia['frente']
+    df_historico = buscar_historico_glebas_ativas(
+        glebas_do_dia
+    )
+
+
+
+
+    # Filtro frentes
+
+
+    lista_frentes = sorted(
+
+        df_dia["frente"]
+
         .unique()
+
         .tolist()
+
     )
 
 
-    selecionadas = st.sidebar.multiselect(
+
+    frentes_selecionadas = st.sidebar.multiselect(
+
         "Selecione as Frentes:",
-        frentes,
-        default=frentes
+
+        options=lista_frentes,
+
+        default=lista_frentes
+
     )
+
 
 
 
     df_filtrado = (
+
         df_dia
-        if not selecionadas
+
+        if not frentes_selecionadas
+
         else df_dia[
-            df_dia['frente']
-            .isin(selecionadas)
+
+            df_dia["frente"]
+
+            .isin(frentes_selecionadas)
+
         ]
+
     )
 
 
 
-    if not df_hist.empty:
+
+
+    # Junta histórico
+
+
+    if not df_historico.empty:
 
 
         df_visualizacao = pd.merge(
+
             df_filtrado,
-            df_hist,
+
+            df_historico,
+
             on="gleba",
+
             how="left"
+
         )
 
 
@@ -347,8 +435,11 @@ else:
 
         df_visualizacao = df_filtrado.copy()
 
+
         df_visualizacao[
-            'TC Total Gleba (Histórico)'
+
+            "TC Total Gleba (Histórico)"
+
         ] = 0
 
 
@@ -356,59 +447,122 @@ else:
 
 
     df_visualizacao[
-        'TC Total Gleba (Histórico)'
+
+        "TC Total Gleba (Histórico)"
+
     ] = (
+
         df_visualizacao[
-            'TC Total Gleba (Histórico)'
+
+            "TC Total Gleba (Histórico)"
+
         ]
+
         .fillna(0)
+
     )
 
 
+
+
+
+    # ==============================
+    # RENOMEAR COLUNAS
+    # ==============================
 
 
     df_visualizacao = df_visualizacao.rename(
+
         columns={
 
-            'frente':'Frente',
-            'nome_fazenda':'Fazenda',
-            'gleba':'Gleba',
-            'tc_estimado':'TC Estimado',
-            'tc_real':'TC (Dia)',
-            'TC Total Gleba (Histórico)':'TC (Acumulado)',
-            'atr':'ATR',
-            'mineral_pct':'Imp. Mineral',
-            'vegetal_pct':'Imp. Vegetal'
+
+            "frente":"Frente",
+
+            "nome_fazenda":"Fazenda",
+
+            "gleba":"Gleba",
+
+            "tc_estimado":"TC Estimado",
+
+            "tc_real":"TC (Dia)",
+
+            "TC Total Gleba (Histórico)":"TC (Acumulado)",
+
+            "atr":"ATR",
+
+            "mineral_pct":"Imp. Mineral",
+
+            "vegetal_pct":"Imp. Vegetal"
+
 
         }
+
     )
 
 
 
-    df_visualizacao = df_visualizacao[
 
-        [
-        'Frente',
-        'Fazenda',
-        'Gleba',
-        'TC Estimado',
-        'TC (Dia)',
-        'TC (Acumulado)',
-        'ATR',
-        'Imp. Mineral',
-        'Imp. Vegetal'
-        ]
+
+    ordem = [
+
+        "Frente",
+
+        "Fazenda",
+
+        "Gleba",
+
+        "TC Estimado",
+
+        "TC (Dia)",
+
+        "TC (Acumulado)",
+
+        "ATR",
+
+        "Imp. Mineral",
+
+        "Imp. Vegetal"
 
     ]
 
 
 
-    df_visualizacao['Gleba'] = (
-        df_visualizacao['Gleba']
-        .fillna(0)
-        .astype(int)
-        .astype(str)
+    df_visualizacao = (
+
+        df_visualizacao[ordem]
+
+        .sort_values(
+
+            by=[
+
+                "Frente",
+
+                "Fazenda",
+
+                "Gleba"
+
+            ]
+
+        )
+
     )
+
+
+
+
+    df_visualizacao["Gleba"] = (
+
+        df_visualizacao["Gleba"]
+
+        .fillna(0)
+
+        .astype(int)
+
+        .astype(str)
+
+    )
+
+
 
 
 
@@ -422,40 +576,62 @@ else:
 
 
     col1.metric(
+
         "🚜 TC Hoje",
+
         f"{df_visualizacao['TC (Dia)'].sum():,.2f}"
+
     )
+
 
 
     col2.metric(
+
         "🚜 Frentes",
-        df_visualizacao['Frente'].nunique()
+
+        df_visualizacao["Frente"].nunique()
+
     )
 
 
+
     col3.metric(
+
         "🏭 Fazendas",
-        df_visualizacao['Fazenda'].nunique()
+
+        df_visualizacao["Fazenda"].nunique()
+
     )
 
 
 
     media_atr = (
+
         df_visualizacao[
-            df_visualizacao['ATR']>0
-        ]['ATR'].mean()
+
+            df_visualizacao["ATR"] > 0
+
+        ]["ATR"].mean()
+
     )
 
 
 
     col4.metric(
+
         "📈 Média ATR",
+
         f"{media_atr:.2f}"
+
     )
 
 
 
+
+
     st.divider()
+
+
 
 
 
@@ -467,9 +643,13 @@ else:
     aba_detalhe, aba_consolidado, aba_grafico = st.tabs(
 
         [
+
             "📋 Romaneios Detalhados",
+
             "🧮 Consolidado por Frente",
+
             "📈 Gráfico por Frente"
+
         ]
 
     )
@@ -477,7 +657,22 @@ else:
 
 
 
+
+
+    # ==============================
+    # ABA DETALHADA
+    # ==============================
+
+
     with aba_detalhe:
+
+
+        st.markdown(
+
+            f"### 📋 Entrada de Cana {data_selecionada.strftime('%d/%m/%Y')}"
+
+        )
+
 
 
         st.dataframe(
@@ -486,19 +681,26 @@ else:
 
                 {
 
-                'TC Estimado':'{:,.2f}',
-                'TC (Dia)':'{:,.2f}',
-                'TC (Acumulado)':'{:,.2f}',
-                'ATR':'{:.2f}',
-                'Imp. Mineral':'{:.2f}',
-                'Imp. Vegetal':'{:.2f}'
+                    "TC Estimado":"{:,.2f}",
+
+                    "TC (Dia)":"{:,.2f}",
+
+                    "TC (Acumulado)":"{:,.2f}",
+
+                    "ATR":"{:.2f}",
+
+                    "Imp. Mineral":"{:.2f}",
+
+                    "Imp. Vegetal":"{:.2f}"
 
                 }
 
             ),
 
             width="stretch",
+
             hide_index=True,
+
             height=700
 
         )
@@ -507,19 +709,32 @@ else:
 
 
 
+
+    # ==============================
+    # ABA CONSOLIDADO
+    # ==============================
+
+
     with aba_consolidado:
 
 
-        consolidado = (
+        df_consolidado = (
 
             df_visualizacao
-            .groupby('Frente')
+
+            .groupby("Frente")
+
             .agg(
 
-                Total_TC=('TC (Dia)','sum'),
-                Media_ATR=('ATR','mean'),
-                Mineral=('Imp. Mineral','mean'),
-                Vegetal=('Imp. Vegetal','mean')
+                Total_TC=("TC (Dia)","sum"),
+
+                Media_ATR=("ATR","mean"),
+
+                Mineral=("Imp. Mineral","mean"),
+
+                Vegetal=("Imp. Vegetal","mean"),
+
+                Qtd_Glebas=("Gleba","nunique")
 
             )
 
@@ -531,16 +746,24 @@ else:
 
         st.dataframe(
 
-            consolidado.style.format(
+            df_consolidado.style.format(
+
                 {
-                'Total_TC':'{:,.2f}',
-                'Media_ATR':'{:.2f}',
-                'Mineral':'{:.2f}',
-                'Vegetal':'{:.2f}'
+
+                    "Total_TC":"{:,.2f}",
+
+                    "Media_ATR":"{:.2f}",
+
+                    "Mineral":"{:.2f}",
+
+                    "Vegetal":"{:.2f}"
+
                 }
+
             ),
 
             width="stretch",
+
             hide_index=True
 
         )
@@ -549,23 +772,38 @@ else:
 
 
 
+
+
+    # ==============================
+    # ABA GRÁFICO
+    # ==============================
+
+
     with aba_grafico:
 
 
-        grafico = (
+        df_grafico = (
 
             df_visualizacao
-            .groupby('Frente')['TC (Dia)']
+
+            .groupby("Frente")
+
+            ["TC (Dia)"]
+
             .sum()
+
             .reset_index()
 
         )
 
 
+
         st.bar_chart(
 
-            grafico,
+            df_grafico,
+
             x="Frente",
+
             y="TC (Dia)"
 
         )
