@@ -1,26 +1,22 @@
-import streamlit as st
+      import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
 
-
-# ==============================
-# CONFIGURAÇÃO
-# ==============================
+# ==================================
+# CONFIGURAÇÃO DA PÁGINA
+# ==================================
 
 st.set_page_config(
-    page_title="Consulta Glebas - COA",
+    page_title="Consulta de Glebas",
     page_icon="🌱",
     layout="wide"
 )
 
+st.title("🌱 Consulta de Glebas")
 
-st.title("🌱 Consulta por Gleba")
-
-
-
-# ==============================
-# SUPABASE
-# ==============================
+# ==================================
+# CONEXÃO SUPABASE
+# ==================================
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -30,124 +26,90 @@ supabase: Client = create_client(
     SUPABASE_KEY
 )
 
-
-
-# ==============================
-# BUSCAR GLEBAS
-# ==============================
+# ==================================
+# CARREGA DADOS
+# ==================================
 
 @st.cache_data(ttl=1800)
-def buscar_glebas():
+def carregar_dados():
 
-    try:
+    resposta = (
+        supabase
+        .table("APP COLHEITA")
+        .select("gleba, tc_real, tc_estimado")
+        .execute()
+    )
 
-        resposta = (
-            supabase
-            .table("sua_tabela_glebas")
-            .select("*")
-            .execute()
-        )
-
-        return pd.DataFrame(
-            resposta.data
-        )
+    return pd.DataFrame(resposta.data)
 
 
-    except Exception as e:
+dados = carregar_dados()
 
-        st.error(e)
-
-        return pd.DataFrame()
-
-
-
-dados_glebas = buscar_glebas()
-
-
-
-# ==============================
-# FILTRO LATERAL
-# ==============================
+# ==================================
+# SIDEBAR
+# ==================================
 
 st.sidebar.header("🔎 Filtro")
 
+if dados.empty:
+    st.warning("Nenhum dado encontrado.")
+    st.stop()
 
-if not dados_glebas.empty:
+lista_glebas = sorted(
+    dados["gleba"]
+    .dropna()
+    .unique()
+    .tolist()
+)
 
+glebas = st.sidebar.multiselect(
+    "Selecione a Gleba",
+    lista_glebas
+)
 
-    lista_glebas = (
-        dados_glebas["gleba"]
-        .dropna()
-        .unique()
-        .tolist()
-    )
+# ==================================
+# RESULTADO
+# ==================================
 
+if glebas:
 
-    gleba_sel = st.sidebar.multiselect(
-        "Selecione a Gleba",
-        lista_glebas
-    )
-
-
-else:
-
-    st.sidebar.warning(
-        "Nenhuma gleba encontrada"
-    )
-
-    gleba_sel = []
-
-
-
-# ==============================
-# CONSULTA
-# ==============================
-
-if gleba_sel:
-
-
-    resultado = dados_glebas[
-        dados_glebas["gleba"].isin(
-            gleba_sel
-        )
+    resultado = dados[
+        dados["gleba"].isin(glebas)
     ]
 
+    tc_real = resultado["tc_real"].sum()
 
-    st.subheader("Resultado")
-
+    tc_estimado = (
+        resultado
+        .groupby("gleba")["tc_estimado"]
+        .first()
+        .sum()
+    )
 
     col1, col2 = st.columns(2)
 
-
     with col1:
-
         st.metric(
             "🌱 TC Acumulado Realizado",
-            f"{resultado['TC'].sum():,.0f}"
+            f"{tc_real:,.2f}"
         )
-
 
     with col2:
-
-        # NÃO SOMA ESTIMADO
-        estimado = resultado["Estimado"].iloc[0]
-
-
         st.metric(
-            "📋 Estimado",
-            f"{estimado:,.0f}"
+            "📋 TC Estimado",
+            f"{tc_estimado:,.2f}"
         )
 
+    st.divider()
 
+    st.subheader("Dados encontrados")
 
     st.dataframe(
-        resultado,
-        use_container_width=True
+        resultado.sort_values("gleba"),
+        use_container_width=True,
+        hide_index=True
     )
-
 
 else:
 
-    st.info(
-        "Selecione uma gleba no filtro lateral"
-    )
+    st.info("Selecione uma ou mais glebas na barra lateral.")
