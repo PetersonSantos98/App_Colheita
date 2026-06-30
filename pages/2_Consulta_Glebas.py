@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
 
-# =====================================
+# ======================================
 # CONFIGURAÇÃO
-# =====================================
+# ======================================
 
 st.set_page_config(
     page_title="Consulta de Glebas",
@@ -14,9 +14,9 @@ st.set_page_config(
 
 st.title("🌱 Consulta de Glebas")
 
-# =====================================
+# ======================================
 # SUPABASE
-# =====================================
+# ======================================
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -26,50 +26,61 @@ supabase: Client = create_client(
     SUPABASE_KEY
 )
 
-# =====================================
-# CARREGA DADOS
-# =====================================
+# ======================================
+# BUSCAR DADOS
+# ======================================
 
 @st.cache_data(ttl=1800)
 def carregar_dados():
 
-    resposta = (
-        supabase
-        .table("APP_COLHEITA")
-        .select(
-            "gleba,data_saida,tc_real,tc_estimado"
-        )
-        .execute()
-    )
+    try:
 
-    df = pd.DataFrame(resposta.data)
-
-    if not df.empty:
-
-        df["data_saida"] = pd.to_datetime(
-            df["data_saida"]
+        resposta = (
+            supabase
+            .table("APP COLHEITA")
+            .select("*")
+            .execute()
         )
 
-    return df
+        df = pd.DataFrame(resposta.data)
+
+        if df.empty:
+            st.warning("A tabela está vazia.")
+            return df
+
+        # Converte data caso exista
+        if "data_saida" in df.columns:
+            df["data_saida"] = pd.to_datetime(
+                df["data_saida"],
+                errors="coerce"
+            )
+
+        return df
+
+    except Exception as e:
+
+        st.error("Erro ao consultar o Supabase:")
+        st.exception(e)
+        return pd.DataFrame()
 
 
 dados = carregar_dados()
 
-# =====================================
+# ======================================
 # SIDEBAR
-# =====================================
+# ======================================
 
-st.sidebar.header("🔎 Filtro")
+st.sidebar.header("🔎 Pesquisa")
 
 gleba = st.sidebar.text_input(
     "Digite a Gleba"
 )
 
-# =====================================
+# ======================================
 # CONSULTA
-# =====================================
+# ======================================
 
-if gleba:
+if not dados.empty and gleba:
 
     resultado = dados[
         dados["gleba"]
@@ -114,29 +125,30 @@ if gleba:
 
         st.subheader("Dados encontrados")
 
-        tabela = resultado.copy()
+        colunas = [
+            c for c in [
+                "data_saida",
+                "frente",
+                "nome_fazenda",
+                "gleba",
+                "tc_real",
+                "tc_estimado"
+            ] if c in resultado.columns
+        ]
 
-        tabela["data_saida"] = tabela[
-            "data_saida"
-        ].dt.strftime("%d/%m/%Y")
+        tabela = resultado[colunas].copy()
 
-        tabela = tabela.sort_values(
-            "data_saida"
-        )
+        if "data_saida" in tabela.columns:
+            tabela["data_saida"] = tabela["data_saida"].dt.strftime("%d/%m/%Y")
 
         st.dataframe(
-            tabela[
-                [
-                    "gleba",
-                    "data_saida",
-                    "tc_real",
-                    "tc_estimado"
-                ]
-            ],
+            tabela,
             use_container_width=True,
             hide_index=True
         )
 
-else:
+elif dados.empty:
+    st.stop()
 
-    st.info("Digite uma gleba no filtro ao lado.")
+else:
+    st.info("Digite uma gleba no campo de pesquisa.")
