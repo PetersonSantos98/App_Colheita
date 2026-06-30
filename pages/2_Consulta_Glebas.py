@@ -32,27 +32,30 @@ supabase = create_client(
 
 @st.cache_data(ttl=60)
 def carregar_dados():
-
+    # .order("data_saida", ascending=False) traz as datas mais recentes primeiro,
+    # garantindo que os dados novos entrem no limite de linhas da API do Supabase.
     resposta = (
         supabase
         .table("APP COLHEITA")
         .select("*")
+        .order("data_saida", ascending=False)
         .execute()
     )
 
     df = pd.DataFrame(resposta.data)
 
     if not df.empty:
-        # Garante que a coluna de data seja convertida corretamente
         if "data_saida" in df.columns:
             df["data_saida"] = pd.to_datetime(
                 df["data_saida"],
                 errors="coerce"
             )
         
-        # CORREÇÃO CRÍTICA: Força a coluna gleba a ser inteira, mesmo se houver nulos
         if "gleba" in df.columns:
-            df["gleba"] = pd.to_numeric(df["gleba"], errors="coerce").astype("Int64")
+            # Converte para numérico e remove nulos para evitar float .0
+            df["gleba"] = pd.to_numeric(df["gleba"], errors="coerce")
+            df = df.dropna(subset=["gleba"])
+            df["gleba"] = df["gleba"].astype(int)
 
     return df
 
