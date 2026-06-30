@@ -30,7 +30,8 @@ supabase = create_client(
 # CARREGAR DADOS
 # ======================================
 
-@st.cache_data(ttl=1800)
+# Atualizado para 60 segundos conforme solicitado
+@st.cache_data(ttl=60)
 def carregar_dados():
 
     resposta = (
@@ -61,10 +62,11 @@ if dados.empty:
 # FILTRO
 # ======================================
 
+# Corrigido para carregar como int para bater com o tipo do Supabase
 lista_glebas = (
     dados["gleba"]
     .dropna()
-    .astype(str)
+    .astype(int)
     .sort_values()
     .unique()
     .tolist()
@@ -84,12 +86,14 @@ glebas_sel = st.sidebar.multiselect(
 
 if glebas_sel:
 
+    # Corrigido a comparação garantindo tipo numérico inteiro
     resultado = dados[
-        dados["gleba"].astype(str).isin(glebas_sel)
+        dados["gleba"].astype(int).isin(glebas_sel)
     ].copy()
 
     tc_real = resultado["tc_real"].sum()
 
+    # Pega o primeiro estimado de cada gleba para evitar duplicar a meta
     tc_estimado = (
         resultado
         .groupby("gleba")["tc_estimado"]
@@ -124,6 +128,7 @@ if glebas_sel:
 
     st.divider()
 
+    # Agrupamento da tabela mantendo o primeiro estimado de cada gleba por frente
     tabela = (
         resultado
         .groupby(
