@@ -4,7 +4,7 @@ from supabase import create_client
 
 
 # ======================================
-# CONFIG
+# CONFIGURAÇÃO
 # ======================================
 
 st.set_page_config(
@@ -30,32 +30,67 @@ supabase = create_client(
 
 
 # ======================================
-# BUSCA APENAS GLEBAS
+# BUSCAR TODAS AS GLEBAS COM PAGINAÇÃO
 # ======================================
 
 @st.cache_data(ttl=300)
 def buscar_glebas():
 
-    resposta = (
-        supabase
-        .table("APP COLHEITA")
-        .select("gleba")
-        .execute()
-    )
+    registros = []
 
-    df = pd.DataFrame(resposta.data)
+    inicio = 0
+    limite = 1000
+
+
+    while True:
+
+        resposta = (
+            supabase
+            .table("APP COLHEITA")
+            .select("gleba")
+            .range(
+                inicio,
+                inicio + limite - 1
+            )
+            .execute()
+        )
+
+
+        dados = resposta.data
+
+
+        if not dados:
+            break
+
+
+        registros.extend(dados)
+
+
+        if len(dados) < limite:
+            break
+
+
+        inicio += limite
+
+
+
+    df = pd.DataFrame(registros)
+
 
     if df.empty:
         return []
+
 
     df["gleba"] = pd.to_numeric(
         df["gleba"],
         errors="coerce"
     )
 
+
     df = df.dropna()
 
-    return (
+
+    return sorted(
         df["gleba"]
         .astype(int)
         .unique()
@@ -63,41 +98,82 @@ def buscar_glebas():
     )
 
 
+
 # ======================================
-# BUSCA SOMENTE A GLEBA ESCOLHIDA
+# BUSCAR DADOS DAS GLEBAS SELECIONADAS
 # ======================================
 
 @st.cache_data(ttl=60)
-def buscar_dados_gleba(lista_glebas):
-
-    resposta = (
-        supabase
-        .table("APP COLHEITA")
-        .select("*")
-        .in_("gleba", lista_glebas)
-        .execute()
-    )
+def buscar_dados_gleba(glebas):
 
 
-    df = pd.DataFrame(resposta.data)
+    registros = []
+
+    inicio = 0
+    limite = 1000
+
+
+    while True:
+
+
+        resposta = (
+            supabase
+            .table("APP COLHEITA")
+            .select("*")
+            .in_(
+                "gleba",
+                glebas
+            )
+            .range(
+                inicio,
+                inicio + limite - 1
+            )
+            .execute()
+        )
+
+
+        dados = resposta.data
+
+
+        if not dados:
+            break
+
+
+        registros.extend(dados)
+
+
+        if len(dados) < limite:
+            break
+
+
+        inicio += limite
+
+
+
+    df = pd.DataFrame(registros)
+
 
 
     if not df.empty:
+
 
         df["gleba"] = pd.to_numeric(
             df["gleba"],
             errors="coerce"
         )
 
+
         df["tc_real"] = pd.to_numeric(
             df["tc_real"],
             errors="coerce"
         )
 
+
         df["tc_estimado"] = pd.to_numeric(
             df["tc_estimado"],
             errors="coerce"
         )
+
 
     return df
 
@@ -107,15 +183,15 @@ def buscar_dados_gleba(lista_glebas):
 # FILTRO
 # ======================================
 
-
-lista = buscar_glebas()
+lista_glebas = buscar_glebas()
 
 
 st.sidebar.header("🔎 Filtro")
 
-glebas = st.sidebar.multiselect(
-    "Selecione a gleba",
-    lista
+
+glebas_selecionadas = st.sidebar.multiselect(
+    "Selecione a Gleba",
+    options=lista_glebas
 )
 
 
@@ -124,18 +200,18 @@ glebas = st.sidebar.multiselect(
 # RESULTADO
 # ======================================
 
-if glebas:
+if glebas_selecionadas:
 
 
     dados = buscar_dados_gleba(
-        glebas
+        glebas_selecionadas
     )
 
 
     if dados.empty:
 
         st.warning(
-            "Nenhum dado encontrado."
+            "Nenhum registro encontrado."
         )
 
         st.stop()
@@ -143,6 +219,7 @@ if glebas:
 
 
     tc_real = dados["tc_real"].sum()
+
 
 
     tc_estimado = (
@@ -154,31 +231,33 @@ if glebas:
     )
 
 
+
     percentual = (
-        tc_real / tc_estimado * 100
+        (tc_real / tc_estimado) * 100
         if tc_estimado > 0
         else 0
     )
 
 
 
-    c1,c2,c3 = st.columns(3)
+    col1,col2,col3 = st.columns(3)
 
 
-    c1.metric(
-        "🌱 Realizado",
+
+    col1.metric(
+        "🌱 TC Realizado",
         f"{tc_real:,.2f}"
     )
 
 
-    c2.metric(
-        "📋 Estimado",
+    col2.metric(
+        "📋 TC Estimado",
         f"{tc_estimado:,.2f}"
     )
 
 
-    c3.metric(
-        "📈 Concluído",
+    col3.metric(
+        "📈 % Concluído",
         f"{percentual:.1f}%"
     )
 
@@ -191,7 +270,10 @@ if glebas:
     tabela = (
         dados
         .groupby(
-            ["gleba","frente"],
+            [
+                "gleba",
+                "frente"
+            ],
             as_index=False
         )
         .agg(
@@ -203,12 +285,16 @@ if glebas:
     )
 
 
-    tabela.columns = [
-        "Gleba",
-        "Frente",
-        "TC Real",
-        "TC Estimado"
-    ]
+
+    tabela = tabela.rename(
+        columns={
+            "gleba":"Gleba",
+            "frente":"Frente",
+            "tc_real":"TC Real",
+            "tc_estimado":"TC Estimado"
+        }
+    )
+
 
 
     st.dataframe(
@@ -220,6 +306,7 @@ if glebas:
 
 else:
 
+
     st.info(
-        "Selecione uma gleba."
+        "Selecione uma gleba no filtro lateral."
     )
