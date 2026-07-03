@@ -1,7 +1,11 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from supabase import create_client, Client
+
+# Fuso horário do Brasil
+FUSO_BR = ZoneInfo("America/Sao_Paulo")
 
 # Configuração da Página Isolada
 st.set_page_config(
@@ -42,7 +46,14 @@ except Exception as e:
 # FILTROS EXCLUSIVOS DA PÁGINA
 # ==============================
 st.sidebar.header("🔍 Filtros de Pesquisa")
-data_selecionada = st.sidebar.date_input("Selecione a data:", date.today())
+
+# Data atual considerando o horário de Brasília
+hoje = datetime.now(FUSO_BR).date()
+
+data_selecionada = st.sidebar.date_input(
+    "Selecione a data:",
+    hoje
+)
 
 # ==============================
 # FUNÇÕES DE BUSCA (CACHED)
