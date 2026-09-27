@@ -27,6 +27,11 @@ paginas = {
         st.Page(
             "pages/2_Consulta_Glebas.py",
             title="🌱 Consulta por Gleba"
+        ),
+
+        st.Page(
+            "pages/3_Manutencoes.py",
+            title="🔧 Manutenções"
         )
     ]
 
@@ -58,8 +63,7 @@ else:
 
     st.subheader("OPERAÇÃO")
 
-    col1, col2 = st.columns(2)
-
+    col1, col2, col3 = st.columns(3)
 
     with col1:
 
@@ -68,10 +72,16 @@ else:
             "Use o menu lateral para acessar."
         )
 
-
     with col2:
 
         st.info(
             "🌱 Consulta por Gleba\n\n"
+            "Use o menu lateral para acessar."
+        )
+
+    with col3:
+
+        st.info(
+            "🔧 Manutenções\n\n"
             "Use o menu lateral para acessar."
         )
