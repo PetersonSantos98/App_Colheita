@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
-
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from supabase import create_client
 
 
 # ============================================================
-# CONFIGURAÇÕES
+# CONFIGURAÇÃO
 # ============================================================
 
 st.set_page_config(
@@ -20,17 +19,6 @@ FUSO_BR = ZoneInfo("America/Sao_Paulo")
 
 
 # ============================================================
-# TÍTULO
-# ============================================================
-
-st.title("🔧 Controle de Manutenções")
-
-st.caption(
-    "Equipamentos atualmente registrados em manutenção no IFROTA"
-)
-
-
-# ============================================================
 # SUPABASE
 # ============================================================
 
@@ -40,7 +28,6 @@ SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 @st.cache_resource
 def conectar_supabase():
-
     return create_client(
         SUPABASE_URL,
         SUPABASE_KEY
@@ -51,14 +38,24 @@ supabase = conectar_supabase()
 
 
 # ============================================================
-# ATUALIZAÇÃO MANUAL
+# CABEÇALHO
+# ============================================================
+
+st.title("🔧 Manutenções - Colheita")
+
+st.caption(
+    "Equipamentos atualmente em manutenção no IFROTA"
+)
+
+
+# ============================================================
+# ATUALIZAÇÃO
 # ============================================================
 
 if st.sidebar.button(
     "🔄 Atualizar Agora",
     use_container_width=True
 ):
-
     st.cache_data.clear()
     st.rerun()
 
@@ -81,7 +78,6 @@ def buscar_manutencoes():
             supabase
             .table("manutencoes_ifrota")
             .select(
-                "chave,"
                 "tipo_equipamento,"
                 "base,"
                 "classe,"
@@ -93,6 +89,7 @@ def buscar_manutencoes():
                 "motivo,"
                 "atualizado_em"
             )
+            .eq("base", 2026)
             .range(
                 inicio,
                 inicio + limite - 1
@@ -116,30 +113,29 @@ def buscar_manutencoes():
 
 
 # ============================================================
-# CARREGAMENTO
+# CARREGAR
 # ============================================================
 
-with st.spinner(
-    "Carregando manutenções..."
-):
+try:
 
-    try:
-
+    with st.spinner(
+        "Carregando manutenções..."
+    ):
         registros = buscar_manutencoes()
 
-    except Exception as erro:
+except Exception as erro:
 
-        st.error(
-            f"Erro ao consultar as manutenções: {erro}"
-        )
+    st.error(
+        f"Erro ao consultar Supabase: {erro}"
+    )
 
-        st.stop()
+    st.stop()
 
 
 if not registros:
 
     st.warning(
-        "Nenhuma manutenção encontrada."
+        "Nenhuma manutenção da colheita encontrada."
     )
 
     st.stop()
@@ -149,16 +145,16 @@ df = pd.DataFrame(registros)
 
 
 # ============================================================
-# TRATAMENTO
+# TRATAR CAMPOS
 # ============================================================
 
 for coluna in [
+    "tipo_equipamento",
     "frente",
     "local",
     "frota",
     "gleba",
-    "motivo",
-    "tipo_equipamento"
+    "motivo"
 ]:
 
     if coluna in df.columns:
@@ -172,45 +168,48 @@ for coluna in [
 
 
 # ============================================================
-# CORRIGIR FROTA / GLEBA
+# FROTA / GLEBA SEM .0
 # ============================================================
 
-def remover_decimal(valor):
-
-    if valor is None:
-        return ""
+def remover_ponto_zero(valor):
 
     texto = str(valor).strip()
 
     if texto.endswith(".0"):
-
-        texto = texto[:-2]
+        return texto[:-2]
 
     return texto
 
 
 df["frota"] = df["frota"].apply(
-    remover_decimal
+    remover_ponto_zero
 )
 
 df["gleba"] = df["gleba"].apply(
-    remover_decimal
+    remover_ponto_zero
 )
 
 
 # ============================================================
-# DATA DE INÍCIO
+# CLASSE
 # ============================================================
 
-df["inicio"] = pd.to_datetime(
+df["classe"] = pd.to_numeric(
+    df["classe"],
+    errors="coerce"
+)
+
+
+# ============================================================
+# DATA/HORA DE INÍCIO
+# ============================================================
+
+# O Oracle está enviando o horário operacional local.
+# Portanto não tratamos o valor como UTC.
+
+df["inicio_dt"] = pd.to_datetime(
     df["inicio"],
-    errors="coerce",
-    utc=True
-)
-
-df["inicio"] = (
-    df["inicio"]
-    .dt.tz_convert(FUSO_BR)
+    errors="coerce"
 )
 
 
@@ -218,135 +217,194 @@ df["inicio"] = (
 # DURAÇÃO
 # ============================================================
 
-agora = pd.Timestamp.now(
-    tz=FUSO_BR
+agora = datetime.now(FUSO_BR).replace(
+    tzinfo=None
 )
 
 
-df["duracao_timedelta"] = (
-    agora - df["inicio"]
+df["duracao_segundos"] = (
+    agora - df["inicio_dt"]
+).dt.total_seconds()
+
+
+df["duracao_segundos"] = (
+    df["duracao_segundos"]
+    .fillna(0)
+    .clip(lower=0)
 )
 
 
-# ============================================================
-# FORMATAR DURAÇÃO
-# ============================================================
+def formatar_duracao(segundos):
 
-def formatar_duracao(valor):
-
-    if pd.isna(valor):
-
+    try:
+        segundos = int(segundos)
+    except:
         return ""
 
-    segundos = int(
-        valor.total_seconds()
-    )
-
-    if segundos < 0:
-
-        return "00:00:00"
-
-    dias = segundos // 86400
-
-    horas = (
-        segundos % 86400
-    ) // 3600
+    horas = segundos // 3600
 
     minutos = (
         segundos % 3600
     ) // 60
 
-    segundos_restantes = (
-        segundos % 60
-    )
-
-    # Mantém horas acumuladas,
-    # igual ao Excel [h]:mm:ss
-
-    horas_totais = (
-        dias * 24
-    ) + horas
-
     return (
-        f"{horas_totais:02d}:"
-        f"{minutos:02d}:"
-        f"{segundos_restantes:02d}"
+        f"{horas:02d}:"
+        f"{minutos:02d}"
     )
 
 
 df["duracao"] = (
-    df["duracao_timedelta"]
+    df["duracao_segundos"]
     .apply(formatar_duracao)
 )
 
 
 # ============================================================
-# SIDEBAR
+# PADRONIZAÇÃO DAS CATEGORIAS
+# ============================================================
+
+# Caminhões
+df.loc[
+    df["classe"] == 1,
+    "grupo_app"
+] = "Caminhões"
+
+
+# Carretas / caixas
+df.loc[
+    df["classe"] == 5,
+    "grupo_app"
+] = "Carretas"
+
+
+# ============================================================
+# IDENTIFICAR FRENTE 1 A 5
+# ============================================================
+
+def identificar_frente(valor):
+
+    texto = str(valor).upper().strip()
+
+    # Ordem importante:
+    # primeiro 1, 2, 3 etc.
+
+    if (
+        "FRENTE 1" in texto
+        or texto == "1"
+    ):
+        return "Frente 1"
+
+    if (
+        "FRENTE 2" in texto
+        or texto == "2"
+    ):
+        return "Frente 2"
+
+    if (
+        "FRENTE 3" in texto
+        or texto == "3"
+    ):
+        return "Frente 3"
+
+    if (
+        "FRENTE 4" in texto
+        or texto == "4"
+    ):
+        return "Frente 4"
+
+    if (
+        "FRENTE 5" in texto
+        or texto == "5"
+    ):
+        return "Frente 5"
+
+    return None
+
+
+# Tratores e máquinas usam a frente
+mascara_frentes = (
+    df["classe"].isin([2, 4])
+)
+
+
+df.loc[
+    mascara_frentes,
+    "grupo_app"
+] = (
+    df.loc[
+        mascara_frentes,
+        "frente"
+    ]
+    .apply(identificar_frente)
+)
+
+
+# ============================================================
+# ORDEM DOS GRUPOS
+# ============================================================
+
+GRUPOS = [
+    "Frente 1",
+    "Frente 2",
+    "Frente 3",
+    "Frente 4",
+    "Frente 5",
+    "Carretas",
+    "Caminhões"
+]
+
+
+# ============================================================
+# FILTROS
 # ============================================================
 
 st.sidebar.header(
-    "🔍 Filtros de Manutenção"
+    "🔍 Filtros"
 )
 
 
-# ============================================================
-# TIPO DE EQUIPAMENTO
-# ============================================================
+# ------------------------------------------------------------
+# PESQUISA FROTA
+# ------------------------------------------------------------
 
-tipos = sorted(
+pesquisa_frota = (
+    st.sidebar
+    .text_input(
+        "Pesquisar Frota"
+    )
+    .strip()
+)
+
+
+# ------------------------------------------------------------
+# MOTIVO
+# ------------------------------------------------------------
+
+motivos = sorted(
     [
         x
-        for x in df[
-            "tipo_equipamento"
-        ].unique()
+        for x in df["motivo"].unique()
         if x
     ]
 )
 
 
-tipos_selecionados = (
+motivos_selecionados = (
     st.sidebar.multiselect(
-        "Tipo de equipamento:",
-        options=tipos,
-        default=tipos
+        "Motivo",
+        options=motivos
     )
 )
 
 
-# ============================================================
-# FRENTE
-# ============================================================
-
-frentes = sorted(
-    [
-        x
-        for x in df[
-            "frente"
-        ].unique()
-        if x
-    ]
-)
-
-
-frentes_selecionadas = (
-    st.sidebar.multiselect(
-        "Frente:",
-        options=frentes,
-        default=frentes
-    )
-)
-
-
-# ============================================================
+# ------------------------------------------------------------
 # LOCAL
-# ============================================================
+# ------------------------------------------------------------
 
 locais = sorted(
     [
         x
-        for x in df[
-            "local"
-        ].unique()
+        for x in df["local"].unique()
         if x
     ]
 )
@@ -354,21 +412,9 @@ locais = sorted(
 
 locais_selecionados = (
     st.sidebar.multiselect(
-        "Local:",
+        "Local",
         options=locais
     )
-)
-
-
-# ============================================================
-# PESQUISA POR FROTA
-# ============================================================
-
-pesquisa_frota = (
-    st.sidebar.text_input(
-        "🔎 Pesquisar Frota:"
-    )
-    .strip()
 )
 
 
@@ -379,27 +425,29 @@ pesquisa_frota = (
 df_filtrado = df.copy()
 
 
-if tipos_selecionados:
+if pesquisa_frota:
 
     df_filtrado = (
         df_filtrado[
             df_filtrado[
-                "tipo_equipamento"
-            ].isin(
-                tipos_selecionados
+                "frota"
+            ].str.contains(
+                pesquisa_frota,
+                case=False,
+                na=False
             )
         ]
     )
 
 
-if frentes_selecionadas:
+if motivos_selecionados:
 
     df_filtrado = (
         df_filtrado[
             df_filtrado[
-                "frente"
+                "motivo"
             ].isin(
-                frentes_selecionadas
+                motivos_selecionados
             )
         ]
     )
@@ -418,62 +466,33 @@ if locais_selecionados:
     )
 
 
-if pesquisa_frota:
-
-    df_filtrado = (
-        df_filtrado[
-            df_filtrado[
-                "frota"
-            ].str.contains(
-                pesquisa_frota,
-                case=False,
-                na=False
-            )
-        ]
-    )
-
-
 # ============================================================
 # INDICADORES
 # ============================================================
 
-total = len(
-    df_filtrado
-)
+total = len(df_filtrado)
 
-
-total_geral = len(
+tratores = len(
     df_filtrado[
-        df_filtrado[
-            "tipo_equipamento"
-        ] == "GERAL"
+        df_filtrado["classe"] == 2
     ]
 )
 
-
-total_tratores = len(
+maquinas = len(
     df_filtrado[
-        df_filtrado[
-            "tipo_equipamento"
-        ] == "TRATOR"
+        df_filtrado["classe"] == 4
     ]
 )
 
-
-total_maquinas = len(
+carretas = len(
     df_filtrado[
-        df_filtrado[
-            "tipo_equipamento"
-        ] == "MAQUINA"
+        df_filtrado["classe"] == 5
     ]
 )
 
-
-total_caixas = len(
+caminhoes = len(
     df_filtrado[
-        df_filtrado[
-            "tipo_equipamento"
-        ] == "CAIXA"
+        df_filtrado["classe"] == 1
     ]
 )
 
@@ -489,23 +508,23 @@ col1.metric(
 )
 
 col2.metric(
-    "🛠️ Geral",
-    total_geral
+    "🚜 Tratores",
+    tratores
 )
 
 col3.metric(
-    "🚜 Tratores",
-    total_tratores
+    "🌾 Máquinas",
+    maquinas
 )
 
 col4.metric(
-    "🚜 Máquinas",
-    total_maquinas
+    "🚛 Carretas",
+    carretas
 )
 
 col5.metric(
-    "📦 Caixas",
-    total_caixas
+    "🚚 Caminhões",
+    caminhoes
 )
 
 
@@ -513,211 +532,263 @@ st.divider()
 
 
 # ============================================================
-# ABAS
+# FUNÇÃO PARA MONTAR TABELA
 # ============================================================
 
-aba_frentes, aba_tabela = st.tabs(
-    [
-        "🔧 Manutenções por Frente",
-        "📋 Todas as Manutenções"
-    ]
-)
+def montar_tabela(dados):
 
+    if dados.empty:
+        return pd.DataFrame()
 
-# ============================================================
-# ABA 1 - POR FRENTE
-# ============================================================
+    tabela = dados.copy()
 
-with aba_frentes:
+    # --------------------------------------------------------
+    # TIPO
+    # --------------------------------------------------------
 
-    if df_filtrado.empty:
+    def nome_tipo(classe):
 
-        st.info(
-            "Nenhuma manutenção encontrada "
-            "com os filtros selecionados."
-        )
+        if classe == 1:
+            return "CAMINHÃO"
 
-    else:
+        if classe == 2:
+            return "TRATOR"
 
-        lista_frentes = sorted(
-            df_filtrado[
-                "frente"
-            ]
-            .fillna("")
-            .unique()
-        )
+        if classe == 4:
+            return "MÁQUINA"
 
-        for frente in lista_frentes:
+        if classe == 5:
+            return "CARRETA"
 
-            if frente == "":
+        return ""
 
-                nome_frente = (
-                    "SEM FRENTE"
-                )
-
-            else:
-
-                nome_frente = frente
-
-
-            df_frente = (
-                df_filtrado[
-                    df_filtrado[
-                        "frente"
-                    ] == frente
-                ]
-                .copy()
-            )
-
-
-            st.markdown(
-                f"### 🚜 {nome_frente}"
-            )
-
-
-            tabela = (
-                df_frente[
-                    [
-                        "frota",
-                        "motivo",
-                        "inicio",
-                        "gleba",
-                        "local",
-                        "tipo_equipamento",
-                        "duracao"
-                    ]
-                ]
-                .copy()
-            )
-
-
-            tabela["inicio"] = (
-                tabela["inicio"]
-                .dt.strftime(
-                    "%d/%m/%Y %H:%M"
-                )
-            )
-
-
-            tabela = tabela.rename(
-                columns={
-                    "frota": "FROTA",
-                    "motivo": "MOTIVO",
-                    "inicio": "INÍCIO",
-                    "gleba": "GLEBA",
-                    "local": "LOCAL",
-                    "tipo_equipamento": "TIPO",
-                    "duracao": "DURAÇÃO"
-                }
-            )
-
-
-            tabela = tabela.sort_values(
-                by="DURAÇÃO",
-                ascending=False
-            )
-
-
-            st.dataframe(
-                tabela,
-                width="stretch",
-                hide_index=True
-            )
-
-
-            st.write("")
-
-
-# ============================================================
-# ABA 2 - TODAS
-# ============================================================
-
-with aba_tabela:
-
-    tabela_completa = (
-        df_filtrado[
-            [
-                "tipo_equipamento",
-                "frente",
-                "frota",
-                "motivo",
-                "inicio",
-                "gleba",
-                "local",
-                "duracao"
-            ]
-        ]
-        .copy()
+    tabela["TIPO"] = (
+        tabela["classe"]
+        .apply(nome_tipo)
     )
 
+    # --------------------------------------------------------
+    # DATA
+    # --------------------------------------------------------
 
-    tabela_completa[
-        "inicio"
-    ] = (
-        tabela_completa[
-            "inicio"
-        ]
+    tabela["INÍCIO"] = (
+        tabela["inicio_dt"]
         .dt.strftime(
             "%d/%m/%Y %H:%M"
         )
     )
 
+    # --------------------------------------------------------
+    # RENOMEAR
+    # --------------------------------------------------------
 
-    tabela_completa = (
-        tabela_completa.rename(
-            columns={
-                "tipo_equipamento":
-                    "TIPO",
+    tabela = tabela.rename(
+        columns={
+            "frota": "FROTA",
+            "motivo": "MOTIVO",
+            "gleba": "GLEBA",
+            "local": "LOCAL",
+            "duracao": "DURAÇÃO"
+        }
+    )
 
-                "frente":
-                    "FRENTE",
+    # --------------------------------------------------------
+    # ORDEM
+    # --------------------------------------------------------
 
-                "frota":
-                    "FROTA",
+    tabela = tabela[
+        [
+            "FROTA",
+            "TIPO",
+            "MOTIVO",
+            "INÍCIO",
+            "GLEBA",
+            "LOCAL",
+            "DURAÇÃO",
+            "duracao_segundos"
+        ]
+    ]
 
-                "motivo":
-                    "MOTIVO",
+    # Mais antiga primeiro
+    tabela = tabela.sort_values(
+        "duracao_segundos",
+        ascending=False
+    )
 
-                "inicio":
-                    "INÍCIO",
+    tabela = tabela.drop(
+        columns=[
+            "duracao_segundos"
+        ]
+    )
 
-                "gleba":
-                    "GLEBA",
+    return tabela
 
-                "local":
-                    "LOCAL",
 
-                "duracao":
-                    "DURAÇÃO"
+# ============================================================
+# ABAS
+# ============================================================
+
+abas = st.tabs(
+    [
+        "🚜 Frente 1",
+        "🚜 Frente 2",
+        "🚜 Frente 3",
+        "🚜 Frente 4",
+        "🚜 Frente 5",
+        "🚛 Carretas",
+        "🚚 Caminhões"
+    ]
+)
+
+
+# ============================================================
+# EXIBIR CADA GRUPO
+# ============================================================
+
+for aba, grupo in zip(
+    abas,
+    GRUPOS
+):
+
+    with aba:
+
+        dados_grupo = (
+            df_filtrado[
+                df_filtrado[
+                    "grupo_app"
+                ] == grupo
+            ]
+            .copy()
+        )
+
+        quantidade = len(
+            dados_grupo
+        )
+
+        st.markdown(
+            f"### {grupo}"
+        )
+
+        st.caption(
+            f"{quantidade} equipamento(s) "
+            "em manutenção"
+        )
+
+        if dados_grupo.empty:
+
+            st.success(
+                "Nenhum equipamento em manutenção."
+            )
+
+            continue
+
+        tabela = montar_tabela(
+            dados_grupo
+        )
+
+        st.dataframe(
+            tabela,
+            width="stretch",
+            hide_index=True,
+            height=min(
+                700,
+                70 + len(tabela) * 36
+            ),
+            column_config={
+
+                "FROTA":
+                    st.column_config.TextColumn(
+                        "FROTA",
+                        width="small"
+                    ),
+
+                "TIPO":
+                    st.column_config.TextColumn(
+                        "TIPO",
+                        width="small"
+                    ),
+
+                "MOTIVO":
+                    st.column_config.TextColumn(
+                        "MOTIVO",
+                        width="large"
+                    ),
+
+                "INÍCIO":
+                    st.column_config.TextColumn(
+                        "INÍCIO",
+                        width="medium"
+                    ),
+
+                "GLEBA":
+                    st.column_config.TextColumn(
+                        "GLEBA",
+                        width="small"
+                    ),
+
+                "LOCAL":
+                    st.column_config.TextColumn(
+                        "LOCAL",
+                        width="medium"
+                    ),
+
+                "DURAÇÃO":
+                    st.column_config.TextColumn(
+                        "DURAÇÃO",
+                        width="small"
+                    )
             }
         )
-    )
 
 
-    tabela_completa = (
-        tabela_completa.sort_values(
-            by=[
-                "FRENTE",
-                "FROTA"
-            ]
+# ============================================================
+# REGISTROS NÃO CLASSIFICADOS
+# ============================================================
+
+nao_classificados = (
+    df_filtrado[
+        df_filtrado[
+            "grupo_app"
+        ].isna()
+    ]
+)
+
+
+if not nao_classificados.empty:
+
+    with st.expander(
+        "⚠️ Registros sem classificação"
+    ):
+
+        st.warning(
+            f"Existem "
+            f"{len(nao_classificados)} "
+            "registro(s) cuja frente não foi "
+            "identificada como Frente 1 a 5."
         )
-    )
 
-
-    st.dataframe(
-        tabela_completa,
-        width="stretch",
-        hide_index=True,
-        height=700
-    )
+        st.dataframe(
+            nao_classificados[
+                [
+                    "frente",
+                    "classe",
+                    "frota",
+                    "motivo"
+                ]
+            ],
+            width="stretch",
+            hide_index=True
+        )
 
 
 # ============================================================
 # RODAPÉ
 # ============================================================
 
+st.divider()
+
 st.caption(
-    "Última atualização da tela: "
+    "Tela atualizada em "
     + datetime.now(
         FUSO_BR
     ).strftime(
