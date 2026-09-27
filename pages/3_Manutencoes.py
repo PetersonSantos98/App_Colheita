@@ -1,12 +1,13 @@
 import streamlit as st
 import pandas as pd
+
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from supabase import create_client
 
 
 # ============================================================
-# CONFIGURAÇÃO
+# CONFIGURAÇÃO DA PÁGINA
 # ============================================================
 
 st.set_page_config(
@@ -19,26 +20,7 @@ FUSO_BR = ZoneInfo("America/Sao_Paulo")
 
 
 # ============================================================
-# SUPABASE
-# ============================================================
-
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-
-
-@st.cache_resource
-def conectar_supabase():
-    return create_client(
-        SUPABASE_URL,
-        SUPABASE_KEY
-    )
-
-
-supabase = conectar_supabase()
-
-
-# ============================================================
-# CABEÇALHO
+# TÍTULO
 # ============================================================
 
 st.title("🔧 Manutenções - Colheita")
@@ -49,14 +31,46 @@ st.caption(
 
 
 # ============================================================
-# ATUALIZAÇÃO
+# CONEXÃO SUPABASE
+# ============================================================
+
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+
+
+@st.cache_resource
+def conectar_supabase():
+
+    return create_client(
+        SUPABASE_URL,
+        SUPABASE_KEY
+    )
+
+
+try:
+
+    supabase = conectar_supabase()
+
+except Exception as erro:
+
+    st.error(
+        f"Erro ao conectar ao Supabase: {erro}"
+    )
+
+    st.stop()
+
+
+# ============================================================
+# ATUALIZAÇÃO MANUAL
 # ============================================================
 
 if st.sidebar.button(
     "🔄 Atualizar Agora",
     use_container_width=True
 ):
+
     st.cache_data.clear()
+
     st.rerun()
 
 
@@ -89,7 +103,10 @@ def buscar_manutencoes():
                 "motivo,"
                 "atualizado_em"
             )
-            .eq("base", 2026)
+            .eq(
+                "base",
+                2026
+            )
             .range(
                 inicio,
                 inicio + limite - 1
@@ -102,7 +119,9 @@ def buscar_manutencoes():
         if not dados:
             break
 
-        registros.extend(dados)
+        registros.extend(
+            dados
+        )
 
         if len(dados) < limite:
             break
@@ -113,7 +132,7 @@ def buscar_manutencoes():
 
 
 # ============================================================
-# CARREGAR
+# CARREGAR DADOS
 # ============================================================
 
 try:
@@ -121,6 +140,7 @@ try:
     with st.spinner(
         "Carregando manutenções..."
     ):
+
         registros = buscar_manutencoes()
 
 except Exception as erro:
@@ -132,6 +152,10 @@ except Exception as erro:
     st.stop()
 
 
+# ============================================================
+# VERIFICAR SE EXISTEM REGISTROS
+# ============================================================
+
 if not registros:
 
     st.warning(
@@ -141,21 +165,30 @@ if not registros:
     st.stop()
 
 
-df = pd.DataFrame(registros)
+# ============================================================
+# DATAFRAME
+# ============================================================
+
+df = pd.DataFrame(
+    registros
+)
 
 
 # ============================================================
-# TRATAR CAMPOS
+# TRATAR CAMPOS DE TEXTO
 # ============================================================
 
-for coluna in [
+colunas_texto = [
     "tipo_equipamento",
     "frente",
     "local",
     "frota",
     "gleba",
     "motivo"
-]:
+]
+
+
+for coluna in colunas_texto:
 
     if coluna in df.columns:
 
@@ -168,10 +201,13 @@ for coluna in [
 
 
 # ============================================================
-# FROTA / GLEBA SEM .0
+# REMOVER .0 DE FROTA E GLEBA
 # ============================================================
 
 def remover_ponto_zero(valor):
+
+    if valor is None:
+        return ""
 
     texto = str(valor).strip()
 
@@ -181,12 +217,15 @@ def remover_ponto_zero(valor):
     return texto
 
 
-df["frota"] = df["frota"].apply(
-    remover_ponto_zero
+df["frota"] = (
+    df["frota"]
+    .apply(remover_ponto_zero)
 )
 
-df["gleba"] = df["gleba"].apply(
-    remover_ponto_zero
+
+df["gleba"] = (
+    df["gleba"]
+    .apply(remover_ponto_zero)
 )
 
 
@@ -204,12 +243,21 @@ df["classe"] = pd.to_numeric(
 # DATA/HORA DE INÍCIO
 # ============================================================
 
-# O Oracle está enviando o horário operacional local.
-# Portanto não tratamos o valor como UTC.
+# O Supabase retorna o timestamp com informação de timezone.
+# Convertemos primeiro para UTC e depois para São Paulo.
 
 df["inicio_dt"] = pd.to_datetime(
     df["inicio"],
-    errors="coerce"
+    errors="coerce",
+    utc=True
+)
+
+
+df["inicio_dt"] = (
+    df["inicio_dt"]
+    .dt.tz_convert(
+        "America/Sao_Paulo"
+    )
 )
 
 
@@ -217,13 +265,18 @@ df["inicio_dt"] = pd.to_datetime(
 # DURAÇÃO
 # ============================================================
 
-agora = datetime.now(FUSO_BR).replace(
-    tzinfo=None
+# AGORA também possui timezone.
+# Isso evita o erro:
+# Cannot compare tz-naive and tz-aware datetime-like objects
+
+agora = pd.Timestamp.now(
+    tz="America/Sao_Paulo"
 )
 
 
 df["duracao_segundos"] = (
-    agora - df["inicio_dt"]
+    agora
+    - df["inicio_dt"]
 ).dt.total_seconds()
 
 
@@ -234,17 +287,33 @@ df["duracao_segundos"] = (
 )
 
 
+# ============================================================
+# FORMATAR DURAÇÃO
+# ============================================================
+
 def formatar_duracao(segundos):
 
     try:
-        segundos = int(segundos)
-    except:
+
+        segundos = int(
+            segundos
+        )
+
+    except (
+        ValueError,
+        TypeError
+    ):
+
         return ""
 
-    horas = segundos // 3600
+    horas = (
+        segundos
+        // 3600
+    )
 
     minutos = (
-        segundos % 3600
+        segundos
+        % 3600
     ) // 60
 
     return (
@@ -255,22 +324,37 @@ def formatar_duracao(segundos):
 
 df["duracao"] = (
     df["duracao_segundos"]
-    .apply(formatar_duracao)
+    .apply(
+        formatar_duracao
+    )
 )
 
 
 # ============================================================
-# PADRONIZAÇÃO DAS CATEGORIAS
+# CLASSIFICAÇÃO PARA O APP
 # ============================================================
 
-# Caminhões
+# Começa sem classificação
+
+df["grupo_app"] = None
+
+
+# ============================================================
+# CAMINHÕES
+# CLASSE 1
+# ============================================================
+
 df.loc[
     df["classe"] == 1,
     "grupo_app"
 ] = "Caminhões"
 
 
-# Carretas / caixas
+# ============================================================
+# CARRETAS
+# CLASSE 5
+# ============================================================
+
 df.loc[
     df["classe"] == 5,
     "grupo_app"
@@ -278,52 +362,88 @@ df.loc[
 
 
 # ============================================================
-# IDENTIFICAR FRENTE 1 A 5
+# IDENTIFICAR FRENTE
 # ============================================================
 
 def identificar_frente(valor):
 
-    texto = str(valor).upper().strip()
+    texto = (
+        str(valor)
+        .upper()
+        .strip()
+    )
 
-    # Ordem importante:
-    # primeiro 1, 2, 3 etc.
+    # --------------------------------------------------------
+    # FRENTE 1
+    # --------------------------------------------------------
 
     if (
         "FRENTE 1" in texto
         or texto == "1"
     ):
+
         return "Frente 1"
+
+    # --------------------------------------------------------
+    # FRENTE 2
+    # --------------------------------------------------------
 
     if (
         "FRENTE 2" in texto
         or texto == "2"
     ):
+
         return "Frente 2"
+
+    # --------------------------------------------------------
+    # FRENTE 3
+    # --------------------------------------------------------
 
     if (
         "FRENTE 3" in texto
         or texto == "3"
     ):
+
         return "Frente 3"
+
+    # --------------------------------------------------------
+    # FRENTE 4
+    # --------------------------------------------------------
 
     if (
         "FRENTE 4" in texto
         or texto == "4"
     ):
+
         return "Frente 4"
+
+    # --------------------------------------------------------
+    # FRENTE 5
+    # --------------------------------------------------------
 
     if (
         "FRENTE 5" in texto
         or texto == "5"
     ):
+
         return "Frente 5"
 
     return None
 
 
-# Tratores e máquinas usam a frente
+# ============================================================
+# TRATORES E MÁQUINAS
+# USAM A FRENTE DO IFROTA
+# ============================================================
+
 mascara_frentes = (
-    df["classe"].isin([2, 4])
+    df["classe"]
+    .isin(
+        [
+            2,
+            4
+        ]
+    )
 )
 
 
@@ -335,12 +455,14 @@ df.loc[
         mascara_frentes,
         "frente"
     ]
-    .apply(identificar_frente)
+    .apply(
+        identificar_frente
+    )
 )
 
 
 # ============================================================
-# ORDEM DOS GRUPOS
+# GRUPOS DO APP
 # ============================================================
 
 GRUPOS = [
@@ -363,9 +485,9 @@ st.sidebar.header(
 )
 
 
-# ------------------------------------------------------------
-# PESQUISA FROTA
-# ------------------------------------------------------------
+# ============================================================
+# PESQUISA POR FROTA
+# ============================================================
 
 pesquisa_frota = (
     st.sidebar
@@ -376,14 +498,16 @@ pesquisa_frota = (
 )
 
 
-# ------------------------------------------------------------
-# MOTIVO
-# ------------------------------------------------------------
+# ============================================================
+# FILTRO DE MOTIVO
+# ============================================================
 
 motivos = sorted(
     [
         x
-        for x in df["motivo"].unique()
+        for x in df[
+            "motivo"
+        ].unique()
         if x
     ]
 )
@@ -397,14 +521,16 @@ motivos_selecionados = (
 )
 
 
-# ------------------------------------------------------------
-# LOCAL
-# ------------------------------------------------------------
+# ============================================================
+# FILTRO DE LOCAL
+# ============================================================
 
 locais = sorted(
     [
         x
-        for x in df["local"].unique()
+        for x in df[
+            "local"
+        ].unique()
         if x
     ]
 )
@@ -419,11 +545,17 @@ locais_selecionados = (
 
 
 # ============================================================
-# APLICAR FILTROS
+# DATAFRAME FILTRADO
 # ============================================================
 
-df_filtrado = df.copy()
+df_filtrado = (
+    df.copy()
+)
 
+
+# ============================================================
+# APLICAR PESQUISA DE FROTA
+# ============================================================
 
 if pesquisa_frota:
 
@@ -431,7 +563,8 @@ if pesquisa_frota:
         df_filtrado[
             df_filtrado[
                 "frota"
-            ].str.contains(
+            ]
+            .str.contains(
                 pesquisa_frota,
                 case=False,
                 na=False
@@ -440,18 +573,27 @@ if pesquisa_frota:
     )
 
 
+# ============================================================
+# APLICAR MOTIVO
+# ============================================================
+
 if motivos_selecionados:
 
     df_filtrado = (
         df_filtrado[
             df_filtrado[
                 "motivo"
-            ].isin(
+            ]
+            .isin(
                 motivos_selecionados
             )
         ]
     )
 
+
+# ============================================================
+# APLICAR LOCAL
+# ============================================================
 
 if locais_selecionados:
 
@@ -459,7 +601,8 @@ if locais_selecionados:
         df_filtrado[
             df_filtrado[
                 "local"
-            ].isin(
+            ]
+            .isin(
                 locais_selecionados
             )
         ]
@@ -470,32 +613,50 @@ if locais_selecionados:
 # INDICADORES
 # ============================================================
 
-total = len(df_filtrado)
+total = len(
+    df_filtrado
+)
+
 
 tratores = len(
     df_filtrado[
-        df_filtrado["classe"] == 2
+        df_filtrado[
+            "classe"
+        ] == 2
     ]
 )
+
 
 maquinas = len(
     df_filtrado[
-        df_filtrado["classe"] == 4
+        df_filtrado[
+            "classe"
+        ] == 4
     ]
 )
+
 
 carretas = len(
     df_filtrado[
-        df_filtrado["classe"] == 5
+        df_filtrado[
+            "classe"
+        ] == 5
     ]
 )
+
 
 caminhoes = len(
     df_filtrado[
-        df_filtrado["classe"] == 1
+        df_filtrado[
+            "classe"
+        ] == 1
     ]
 )
 
+
+# ============================================================
+# EXIBIR INDICADORES
+# ============================================================
 
 col1, col2, col3, col4, col5 = (
     st.columns(5)
@@ -507,20 +668,24 @@ col1.metric(
     total
 )
 
+
 col2.metric(
     "🚜 Tratores",
     tratores
 )
+
 
 col3.metric(
     "🌾 Máquinas",
     maquinas
 )
 
+
 col4.metric(
     "🚛 Carretas",
     carretas
 )
+
 
 col5.metric(
     "🚚 Caminhões",
@@ -532,69 +697,104 @@ st.divider()
 
 
 # ============================================================
-# FUNÇÃO PARA MONTAR TABELA
+# FUNÇÃO - NOME DO TIPO
 # ============================================================
 
-def montar_tabela(dados):
+def nome_tipo(classe):
+
+    if classe == 1:
+
+        return "CAMINHÃO"
+
+    if classe == 2:
+
+        return "TRATOR"
+
+    if classe == 4:
+
+        return "MÁQUINA"
+
+    if classe == 5:
+
+        return "CARRETA"
+
+    return ""
+
+
+# ============================================================
+# FUNÇÃO - MONTAR TABELA
+# ============================================================
+
+def montar_tabela(
+    dados
+):
 
     if dados.empty:
+
         return pd.DataFrame()
 
-    tabela = dados.copy()
+    tabela = (
+        dados.copy()
+    )
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # TIPO
-    # --------------------------------------------------------
-
-    def nome_tipo(classe):
-
-        if classe == 1:
-            return "CAMINHÃO"
-
-        if classe == 2:
-            return "TRATOR"
-
-        if classe == 4:
-            return "MÁQUINA"
-
-        if classe == 5:
-            return "CARRETA"
-
-        return ""
+    # ========================================================
 
     tabela["TIPO"] = (
         tabela["classe"]
-        .apply(nome_tipo)
+        .apply(
+            nome_tipo
+        )
     )
 
-    # --------------------------------------------------------
-    # DATA
-    # --------------------------------------------------------
+
+    # ========================================================
+    # DATA/HORA
+    # ========================================================
 
     tabela["INÍCIO"] = (
-        tabela["inicio_dt"]
+        tabela[
+            "inicio_dt"
+        ]
         .dt.strftime(
             "%d/%m/%Y %H:%M"
         )
     )
 
-    # --------------------------------------------------------
-    # RENOMEAR
-    # --------------------------------------------------------
 
-    tabela = tabela.rename(
-        columns={
-            "frota": "FROTA",
-            "motivo": "MOTIVO",
-            "gleba": "GLEBA",
-            "local": "LOCAL",
-            "duracao": "DURAÇÃO"
-        }
+    # ========================================================
+    # RENOMEAR COLUNAS
+    # ========================================================
+
+    tabela = (
+        tabela.rename(
+            columns={
+
+                "frota":
+                    "FROTA",
+
+                "motivo":
+                    "MOTIVO",
+
+                "gleba":
+                    "GLEBA",
+
+                "local":
+                    "LOCAL",
+
+                "duracao":
+                    "DURAÇÃO"
+
+            }
+        )
     )
 
-    # --------------------------------------------------------
-    # ORDEM
-    # --------------------------------------------------------
+
+    # ========================================================
+    # COLUNAS
+    # ========================================================
 
     tabela = tabela[
         [
@@ -609,17 +809,31 @@ def montar_tabela(dados):
         ]
     ]
 
-    # Mais antiga primeiro
-    tabela = tabela.sort_values(
-        "duracao_segundos",
-        ascending=False
+
+    # ========================================================
+    # ORDENAR PELA MAIOR DURAÇÃO
+    # ========================================================
+
+    tabela = (
+        tabela.sort_values(
+            by="duracao_segundos",
+            ascending=False
+        )
     )
 
-    tabela = tabela.drop(
-        columns=[
-            "duracao_segundos"
-        ]
+
+    # ========================================================
+    # REMOVER COLUNA AUXILIAR
+    # ========================================================
+
+    tabela = (
+        tabela.drop(
+            columns=[
+                "duracao_segundos"
+            ]
+        )
     )
+
 
     return tabela
 
@@ -642,7 +856,7 @@ abas = st.tabs(
 
 
 # ============================================================
-# EXIBIR CADA GRUPO
+# EXIBIR GRUPOS
 # ============================================================
 
 for aba, grupo in zip(
@@ -661,18 +875,34 @@ for aba, grupo in zip(
             .copy()
         )
 
+
         quantidade = len(
             dados_grupo
         )
+
+
+        # ====================================================
+        # TÍTULO
+        # ====================================================
 
         st.markdown(
             f"### {grupo}"
         )
 
+
+        # ====================================================
+        # QUANTIDADE
+        # ====================================================
+
         st.caption(
             f"{quantidade} equipamento(s) "
             "em manutenção"
         )
+
+
+        # ====================================================
+        # SEM MANUTENÇÃO
+        # ====================================================
 
         if dados_grupo.empty:
 
@@ -682,9 +912,21 @@ for aba, grupo in zip(
 
             continue
 
-        tabela = montar_tabela(
-            dados_grupo
+
+        # ====================================================
+        # MONTAR TABELA
+        # ====================================================
+
+        tabela = (
+            montar_tabela(
+                dados_grupo
+            )
         )
+
+
+        # ====================================================
+        # EXIBIR TABELA
+        # ====================================================
 
         st.dataframe(
             tabela,
@@ -692,7 +934,8 @@ for aba, grupo in zip(
             hide_index=True,
             height=min(
                 700,
-                70 + len(tabela) * 36
+                70
+                + len(tabela) * 36
             ),
             column_config={
 
@@ -742,7 +985,7 @@ for aba, grupo in zip(
 
 
 # ============================================================
-# REGISTROS NÃO CLASSIFICADOS
+# REGISTROS SEM CLASSIFICAÇÃO
 # ============================================================
 
 nao_classificados = (
@@ -756,6 +999,8 @@ nao_classificados = (
 
 if not nao_classificados.empty:
 
+    st.divider()
+
     with st.expander(
         "⚠️ Registros sem classificação"
     ):
@@ -764,18 +1009,50 @@ if not nao_classificados.empty:
             f"Existem "
             f"{len(nao_classificados)} "
             "registro(s) cuja frente não foi "
-            "identificada como Frente 1 a 5."
+            "identificada como Frente 1 a Frente 5."
         )
 
-        st.dataframe(
+
+        tabela_nao_classificados = (
             nao_classificados[
                 [
                     "frente",
                     "classe",
+                    "tipo_equipamento",
                     "frota",
                     "motivo"
                 ]
-            ],
+            ]
+            .copy()
+        )
+
+
+        tabela_nao_classificados = (
+            tabela_nao_classificados.rename(
+                columns={
+
+                    "frente":
+                        "FRENTE ORIGINAL",
+
+                    "classe":
+                        "CLASSE",
+
+                    "tipo_equipamento":
+                        "TIPO ORIGINAL",
+
+                    "frota":
+                        "FROTA",
+
+                    "motivo":
+                        "MOTIVO"
+
+                }
+            )
+        )
+
+
+        st.dataframe(
+            tabela_nao_classificados,
             width="stretch",
             hide_index=True
         )
@@ -786,6 +1063,7 @@ if not nao_classificados.empty:
 # ============================================================
 
 st.divider()
+
 
 st.caption(
     "Tela atualizada em "
