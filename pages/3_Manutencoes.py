@@ -243,8 +243,8 @@ df["classe"] = pd.to_numeric(
 # DATA/HORA DE INÍCIO
 # ============================================================
 
-# O Supabase retorna o timestamp com informação de timezone.
-# Convertemos primeiro para UTC e depois para São Paulo.
+# O Supabase retorna timestamp com timezone.
+# Primeiro convertemos para UTC e depois para São Paulo.
 
 df["inicio_dt"] = pd.to_datetime(
     df["inicio"],
@@ -266,8 +266,7 @@ df["inicio_dt"] = (
 # ============================================================
 
 # AGORA também possui timezone.
-# Isso evita o erro:
-# Cannot compare tz-naive and tz-aware datetime-like objects
+# Isso evita erro entre tz-naive e tz-aware.
 
 agora = pd.Timestamp.now(
     tz="America/Sao_Paulo"
@@ -333,8 +332,6 @@ df["duracao"] = (
 # ============================================================
 # CLASSIFICAÇÃO PARA O APP
 # ============================================================
-
-# Começa sem classificação
 
 df["grupo_app"] = None
 
@@ -477,136 +474,13 @@ GRUPOS = [
 
 
 # ============================================================
-# FILTROS
+# DADOS PARA EXIBIÇÃO
 # ============================================================
 
-st.sidebar.header(
-    "🔍 Filtros"
-)
+# Não existem mais filtros nesta página.
+# Todos os registros da BASE 2026 serão utilizados.
 
-
-# ============================================================
-# PESQUISA POR FROTA
-# ============================================================
-
-pesquisa_frota = (
-    st.sidebar
-    .text_input(
-        "Pesquisar Frota"
-    )
-    .strip()
-)
-
-
-# ============================================================
-# FILTRO DE MOTIVO
-# ============================================================
-
-motivos = sorted(
-    [
-        x
-        for x in df[
-            "motivo"
-        ].unique()
-        if x
-    ]
-)
-
-
-motivos_selecionados = (
-    st.sidebar.multiselect(
-        "Motivo",
-        options=motivos
-    )
-)
-
-
-# ============================================================
-# FILTRO DE LOCAL
-# ============================================================
-
-locais = sorted(
-    [
-        x
-        for x in df[
-            "local"
-        ].unique()
-        if x
-    ]
-)
-
-
-locais_selecionados = (
-    st.sidebar.multiselect(
-        "Local",
-        options=locais
-    )
-)
-
-
-# ============================================================
-# DATAFRAME FILTRADO
-# ============================================================
-
-df_filtrado = (
-    df.copy()
-)
-
-
-# ============================================================
-# APLICAR PESQUISA DE FROTA
-# ============================================================
-
-if pesquisa_frota:
-
-    df_filtrado = (
-        df_filtrado[
-            df_filtrado[
-                "frota"
-            ]
-            .str.contains(
-                pesquisa_frota,
-                case=False,
-                na=False
-            )
-        ]
-    )
-
-
-# ============================================================
-# APLICAR MOTIVO
-# ============================================================
-
-if motivos_selecionados:
-
-    df_filtrado = (
-        df_filtrado[
-            df_filtrado[
-                "motivo"
-            ]
-            .isin(
-                motivos_selecionados
-            )
-        ]
-    )
-
-
-# ============================================================
-# APLICAR LOCAL
-# ============================================================
-
-if locais_selecionados:
-
-    df_filtrado = (
-        df_filtrado[
-            df_filtrado[
-                "local"
-            ]
-            .isin(
-                locais_selecionados
-            )
-        ]
-    )
+df_filtrado = df.copy()
 
 
 # ============================================================
